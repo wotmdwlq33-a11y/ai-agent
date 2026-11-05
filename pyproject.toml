@@ -1,0 +1,19 @@
+[project]
+name = "jev"
+version = "0.1.0"
+description = "Jev: 개인 비서. 간단한 요청은 직접 처리하고, 나머지는 Claude로 라우팅"
+requires-python = ">=3.10"
+dependencies = ["anthropic>=1.12"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+jev = "jev.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["jev"]
