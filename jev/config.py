@@ -13,6 +13,7 @@
 | `JEV_MAX_TOKENS` | `16000` | Claude 응답 최대 토큰 |
 | `JEV_STREAM` | `on` | CLI에서 답변을 스트리밍으로 출력할지 |
 | `JEV_ENV_FILE` | `./.env` | 읽을 `.env` 파일 경로 |
+| `JEV_SEND_TIME` | `on` | Claude에게 보내는 메시지 앞에 현재 시각을 붙일지 |
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ MAX_BYTES_ENV = "JEV_MAX_HISTORY_BYTES"
 MAX_TOKENS_ENV = "JEV_MAX_TOKENS"
 STREAM_ENV = "JEV_STREAM"
 ENV_FILE_ENV = "JEV_ENV_FILE"
+SEND_TIME_ENV = "JEV_SEND_TIME"
 
 DEFAULT_MAX_MESSAGES = 40
 DEFAULT_MAX_BYTES = 200_000
@@ -59,6 +61,7 @@ class Config:
     max_history_bytes: int = DEFAULT_MAX_BYTES
     max_tokens: int = DEFAULT_MAX_TOKENS
     stream: bool = True
+    send_time: bool = True
 
     @property
     def history_path(self) -> Path:
@@ -86,6 +89,7 @@ class Config:
             max_history_bytes=_parse_int(env, MAX_BYTES_ENV, DEFAULT_MAX_BYTES, 1_000),
             max_tokens=_parse_int(env, MAX_TOKENS_ENV, DEFAULT_MAX_TOKENS, 1),
             stream=_parse_bool(env, STREAM_ENV, default=True),
+            send_time=_parse_bool(env, SEND_TIME_ENV, default=True),
         )
 
 

@@ -12,7 +12,8 @@ from tests.fakes import AskOnlyClaude, FakeClaude
 
 @pytest.fixture
 def cfg(tmp_path):
-    return Config(model=None, data_dir=tmp_path / "data")
+    # 현재 시각 붙이기는 따로 테스트한다
+    return Config(model=None, data_dir=tmp_path / "data", send_time=False)
 
 
 def test_local_request_does_not_call_claude(cfg):
@@ -80,7 +81,7 @@ def test_memory_disabled_does_not_write(tmp_path):
 
 
 def test_history_limit_is_applied(tmp_path):
-    cfg = Config(model=None, data_dir=tmp_path, max_history_messages=4)
+    cfg = Config(model=None, data_dir=tmp_path, max_history_messages=4, send_time=False)
     jev = Jev(FakeClaude(), config=cfg)
     for i in range(5):
         jev.handle(f"안녕 {i}")
@@ -158,3 +159,32 @@ def test_empty_reply_gets_placeholder(cfg):
     jev = Jev(EmptyClaude(), config=cfg)
     jev.handle("안녕")
     assert jev.history[1]["content"] == [{"type": "text", "text": EMPTY_REPLY}]
+
+
+def test_current_time_is_prefixed_to_new_user_messages(tmp_path):
+    cfg = Config(model=None, data_dir=tmp_path)
+    times = iter(
+        [
+            datetime(2026, 11, 5, 13, 8, tzinfo=local_skills.TIMEZONE),
+            datetime(2026, 11, 6, 9, 0, tzinfo=local_skills.TIMEZONE),
+        ]
+    )
+    claude = FakeClaude()
+    jev = Jev(claude, config=cfg, clock=lambda: next(times))
+    jev.handle("크리스마스는 무슨 요일이야?")
+    jev.handle("고마워")
+
+    first, _ = claude.calls[0]
+    assert first[0]["content"] == (
+        "[현재 시각: 2026년 11월 5일(목) 오후 1시 8분 (한국 시간)]\n크리스마스는 무슨 요일이야?"
+    )
+    second, _ = claude.calls[1]
+    # 이전 메시지는 그대로 다시 보낸다 (기록은 덧붙이기만)
+    assert second[0] == first[0]
+    assert second[2]["content"].startswith("[현재 시각: 2026년 11월 6일(금) 오전 9시 0분")
+
+
+def test_send_time_can_be_turned_off(cfg):
+    claude = FakeClaude()
+    Jev(claude, config=cfg).handle("안녕")
+    assert claude.calls[0][0][0]["content"] == "안녕"

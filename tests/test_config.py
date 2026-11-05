@@ -146,3 +146,8 @@ def test_dotenv_with_bom_and_crlf(tmp_path):
     environ: dict[str, str] = {}
     load_dotenv(path, environ)
     assert environ == {"JEV_MODEL": "bom", "JEV_STREAM": "off"}
+
+
+def test_send_time_flag():
+    assert Config.from_env({}).send_time is True
+    assert Config.from_env({"JEV_SEND_TIME": "off"}).send_time is False

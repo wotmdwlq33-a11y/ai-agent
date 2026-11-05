@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from jev import local_skills
+from jev import korean, local_skills
 from jev.claude_client import ClaudeClient, ClaudeReply, TextCallback
 from jev.config import Config
 from jev.memory import (
@@ -49,8 +51,10 @@ class Jev:
         *,
         config: Config | None = None,
         store: ConversationStore | None = None,
+        clock: Callable[[], datetime] = korean.now,
     ) -> None:
         self._claude = claude
+        self._clock = clock
         self.config = config or Config.from_env()
         if store is None and self.config.memory_enabled:
             store = ConversationStore(
@@ -84,7 +88,7 @@ class Jev:
 
         assert decision.effort is not None
         claude = self._get_claude()
-        messages = [*self.history, {"role": "user", "content": text}]
+        messages = [*self.history, {"role": "user", "content": self._user_content(text)}]
         streamed = False
         if on_text is not None and isinstance(claude, StreamingClaudeLike):
             reply = claude.ask_stream(messages, effort=decision.effort, on_text=on_text)
@@ -102,6 +106,19 @@ class Jev:
         return Answer(
             reply.text, decision, streamed=streamed, refused=reply.refused, warning=warning
         )
+
+    def _user_content(self, text: str) -> str:
+        """Claude에게 보낼 사용자 메시지. 설정에 따라 현재 시각을 앞에 붙인다.
+
+        시스템 프롬프트에 날짜를 넣으면 매일 바뀌어 캐시와 이전 thinking 블록이 무효가 되므로,
+        새 메시지에만 붙여 기록은 뒤에 덧붙이기만 하도록 유지한다.
+        """
+        if not self.config.send_time:
+            return text
+        now = korean.localize(self._clock())
+        ampm = "오전" if now.hour < 12 else "오후"
+        stamp = f"{korean.format_date(now.date())} {ampm} {now.hour % 12 or 12}시 {now.minute}분"
+        return f"[현재 시각: {stamp} (한국 시간)]\n{text}"
 
     def _get_claude(self) -> ClaudeLike:
         if self._claude is None:
