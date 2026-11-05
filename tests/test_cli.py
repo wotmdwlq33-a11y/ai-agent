@@ -81,3 +81,17 @@ def test_main_loop_exits_on_eof(monkeypatch, capsys):
     monkeypatch.setattr(builtins, "input", fake_input)
     assert cli.main(["--no-memory"]) == 0
     assert "Jev:" in capsys.readouterr().out
+
+
+class InterruptingClaude(FakeClaude):
+    def ask_stream(self, messages, effort, on_text):
+        on_text("앞부분")
+        raise KeyboardInterrupt
+
+
+def test_ctrl_c_during_stream_stops_only_this_answer(tmp_path):
+    jev = Jev(InterruptingClaude(), config=Config(model=None, data_dir=tmp_path))
+    cap = Capture()
+    cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
+    assert cap.text == "Jev: 앞부분\nJev: (답변을 중단했어요)\n"
+    assert jev.history == []

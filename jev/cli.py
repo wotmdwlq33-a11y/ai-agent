@@ -63,6 +63,10 @@ def respond(jev: Jev, text: str, *, stream: bool, debug: bool, out: Output, writ
 
     try:
         answer = jev.handle(text, on_text=on_text if stream else None)
+    except KeyboardInterrupt:
+        # 답변 도중 Ctrl+C: 이번 답변만 멈추고 대화는 계속한다. 기록에는 남지 않는다.
+        out(("\n" if started else "") + "Jev: (답변을 중단했어요)")
+        return
     except ConfigError as e:
         out(f"\nJev: 설정 오류 — {e}" if started else f"Jev: 설정 오류 — {e}")
         return
