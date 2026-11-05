@@ -54,7 +54,7 @@ LOCAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "date",
         re.compile(
-            r"^\s*(오늘\s*)?(날짜|며칠|무슨\s*요일)\s*"
+            r"^\s*(오늘\s*)?(날짜|(몇\s*월\s*)?며칠|무슨\s*요일)\s*"
             rf"(이야|이지|이에요|예요|야|지|니|(좀\s*)?알려\s*{_PLEASE})?" + _END
         ),
     ),
@@ -157,9 +157,12 @@ _QUESTIONISH = re.compile(
     r"기능|단축키|사용법|쓰는\s*법|하는\s*법|앱|어플|나요|까요|일까|인가"
 )
 
+# "…라고 메모해줘"의 앞부분에 다른 부탁(…해줘, 콜론)이 들어 있는지
+_OTHER_REQUEST = re.compile(rf"[:：]|해\s*{_PLEASE}|{_PLEASE}\s*$")
+
 # 깊게 생각해야 하는 요청을 나타내는 단어
 HIGH_KEYWORDS = re.compile(
-    r"코드|구현|디버그|버그|에러|오류|설계|아키텍처|분석|비교|계획|전략|증명|리팩터|최적화|"
+    r"코드|구현|디버그|디버깅|버그|에러|오류|설계|아키텍처|분석|비교|계획|전략|증명|리팩터|최적화|"
     r"알고리즘|논문|보고서|단계별|왜\s|원인|code|debug|design|analy[sz]e|plan|refactor",
     re.I,
 )
@@ -182,6 +185,9 @@ def _accept(skill: str, m: re.Match[str], text: str) -> bool:
     loose = m.groupdict().get("args2") is not None or m.groupdict().get("args3") is not None
     if skill in ("memo_add", "memo_search") and loose and _QUESTIONISH.search(text):
         return False  # ':' 없는 느슨한 형태는 질문이면 Claude로
+    args3 = m.groupdict().get("args3")
+    if skill == "memo_add" and args3 and _OTHER_REQUEST.search(args3):
+        return False  # "이 문장 번역해줘: 메모해줘"처럼 앞에 다른 부탁이 있으면 Claude로
     if skill == "remind_add":
         if not timeparse.has_time_expression(_match_args(m)):
             return False  # "알림 설정 방법 알려줘" 등

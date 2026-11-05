@@ -190,3 +190,17 @@ def test_memo_add_args(text, args):
 
 def test_memo_search_colon_form_allows_any_text():
     assert route("메모 검색: 앱").args == "앱"
+
+
+@pytest.mark.parametrize("text", ["이 문장 번역해줘: 메모해줘", "요약해줘 메모해줘"])
+def test_other_request_before_memo_verb_goes_to_claude(text):
+    assert route(text).target == "claude"
+
+
+def test_month_day_question_is_local_date():
+    r = route("오늘 몇 월 며칠이야")
+    assert (r.target, r.skill) == ("local", "date")
+
+
+def test_debugging_is_high_effort():
+    assert route("메모리 누수 디버깅 도와줘").effort == "high"
