@@ -17,6 +17,7 @@ from jev.memory import (
     ConversationStore,
     HistoryError,
     has_visible_content,
+    is_empty_text,
     trim_history,
 )
 from jev.router import Route, route
@@ -110,7 +111,8 @@ class Jev:
 
         warning = None
         if not reply.refused:
-            content: Any = reply.content
+            # 빈 텍스트 블록은 API가 거부하므로 빼고 저장한다
+            content: Any = [b for b in reply.content if not is_empty_text(b)]
             if not has_visible_content(content):
                 # thinking만 있거나 비어 있는 응답을 그대로 남기면 다음 요청이 거부된다
                 content = [{"type": "text", "text": reply.text.strip() or EMPTY_REPLY}]

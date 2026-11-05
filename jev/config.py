@@ -131,11 +131,11 @@ def parse_dotenv(text: str, source: str = ".env") -> dict[str, str]:
             raise ConfigError(
                 f"{source} {lineno}번째 줄을 해석할 수 없어요: KEY=VALUE 형식이어야 해요."
             )
-        value = value.strip()
+        raw_value, value = value, value.strip()
         if value[:1] in {'"', "'"}:
             value = _parse_quoted(value, source, lineno)
-        elif value.startswith("#"):
-            value = ""  # KEY=  # 주석
+        elif re.match(r"\s+#", raw_value):
+            value = ""  # "KEY=  # 주석" (공백 뒤의 #만 주석이다. "KEY=#abc"는 값 "#abc")
         else:
             value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
         result[key] = value

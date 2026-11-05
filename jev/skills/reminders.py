@@ -1,7 +1,7 @@
 """로컬 리마인더: data_dir/reminders.json 에 저장한다 (Claude 호출 없음).
 
 CLI는 매 입력 전에 pop_due()를 불러 시간이 된 알림을 보여준다.
-한 프로세스에서 쓰는 것을 전제로 하며, 파일 잠금은 하지 않는다.
+파일을 고칠 때는 jev.storage.file_lock으로 잠가 여러 프로세스가 동시에 써도 안전하다.
 """
 
 from __future__ import annotations

@@ -53,7 +53,8 @@ def _block_type(block: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _is_empty_text(block: Any) -> bool:
+def is_empty_text(block: Any) -> bool:
+    """비어 있거나 공백뿐인 텍스트 블록인지 (API는 이런 블록을 거부한다)."""
     if _block_type(block) != "text":
         return False
     text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
@@ -70,7 +71,7 @@ def has_visible_content(content: Any) -> bool:
         return bool(content.strip())
     if not isinstance(content, list):
         return False
-    return any(_block_type(b) not in _THINKING_TYPES and not _is_empty_text(b) for b in content)
+    return any(_block_type(b) not in _THINKING_TYPES and not is_empty_text(b) for b in content)
 
 
 def strip_thinking(messages: Iterable[Message]) -> list[Message]:
@@ -83,9 +84,7 @@ def strip_thinking(messages: Iterable[Message]) -> list[Message]:
         content = message.get("content")
         if message.get("role") == "assistant" and isinstance(content, list):
             kept = [
-                b
-                for b in content
-                if _block_type(b) not in _THINKING_TYPES and not _is_empty_text(b)
+                b for b in content if _block_type(b) not in _THINKING_TYPES and not is_empty_text(b)
             ]
             if not kept:
                 kept = [{"type": "text", "text": EMPTY_REPLY}]

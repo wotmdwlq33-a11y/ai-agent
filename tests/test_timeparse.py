@@ -268,3 +268,11 @@ def test_noon_and_midnight_words(text, expected):
 def test_noon_already_passed_means_tomorrow():
     after_noon = at(11, 5, 13)
     assert parse_korean_time("정오", after_noon) == at(11, 6, 12)
+
+
+@pytest.mark.parametrize("text", ["정오표 수정", "자정작용", "정오쯤"])
+def test_noon_midnight_word_boundaries(text):
+    from jev.skills.timeparse import has_time_expression
+
+    expected = text == "정오쯤"
+    assert has_time_expression(text) is expected

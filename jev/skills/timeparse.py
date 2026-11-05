@@ -58,7 +58,7 @@ _CLOCK = (
     r"(?<!\d)(?P<hour>\d{1,2})\s*시(?!\s*간)"
     r"(?:\s*(?P<half>반)(?=$|\s|에|까지|부터|[,.!?？])|\s*(?P<minute>\d{1,2})\s*분)?"
     r"|(?<!\d)(?P<hh>\d{1,2}):(?P<mm>\d{2})(?!\d)"
-    r"|(?P<named>정오|자정)"
+    r"|(?P<named>정오|자정)(?=$|\s|에|까지|부터|쯤|[,.!?？])"
 )
 _ABS_RE = re.compile(rf"(?:(?:{_DAY})\s*)?(?:{_PERIOD}\s*)?(?:{_CLOCK})")
 _REL_RE = re.compile(

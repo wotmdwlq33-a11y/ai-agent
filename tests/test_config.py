@@ -151,3 +151,8 @@ def test_dotenv_with_bom_and_crlf(tmp_path):
 def test_send_time_flag():
     assert Config.from_env({}).send_time is True
     assert Config.from_env({"JEV_SEND_TIME": "off"}).send_time is False
+
+
+def test_hash_without_space_is_part_of_value():
+    assert parse_dotenv("PASSWORD=#abc") == {"PASSWORD": "#abc"}
+    assert parse_dotenv("A=   # 주석") == {"A": ""}

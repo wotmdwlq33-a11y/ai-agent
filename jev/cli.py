@@ -25,6 +25,7 @@ Output = Callable[[str], None]
 PROMPT = "나: "
 # 입력을 기다리는 동안 알림을 확인하는 간격(초)
 REMINDER_POLL_SECONDS = 15.0
+REMINDER_ERROR_PREFIX = "(알림을 확인하지 못했어요: "
 
 
 def _print(text: str) -> None:
@@ -57,7 +58,7 @@ def _due_reminders(data_dir: Path) -> list[str]:
     try:
         due = reminders.pop_due(data_dir, current)
     except StorageError as e:
-        return [f"(알림을 확인하지 못했어요: {e})"]
+        return [f"{REMINDER_ERROR_PREFIX}{e})"]
     return [f"⏰ 알림: {r.text} ({format_korean_datetime(r.due, current)})" for r in due]
 
 
@@ -81,6 +82,7 @@ class ReminderWatcher(threading.Thread):
         self._emit = emit
         self._interval = interval
         self._stop_event = threading.Event()
+        self._last_error: str | None = None
 
     def run(self) -> None:
         """stop()이 불릴 때까지 interval마다 알림을 확인한다."""
@@ -91,6 +93,14 @@ class ReminderWatcher(threading.Thread):
         """시간이 된 알림을 한 번 확인해 출력한다."""
         with self._lock:
             lines = _due_reminders(self._data_dir)
+            errors = [line for line in lines if line.startswith(REMINDER_ERROR_PREFIX)]
+            if errors:
+                # 알림 파일 오류는 같은 내용을 15초마다 되풀이하지 않는다
+                if errors[0] == self._last_error:
+                    return
+                self._last_error = errors[0]
+            else:
+                self._last_error = None
             if lines:
                 # 입력 줄 위에 알림을 쓰고 프롬프트를 다시 보여 준다
                 self._emit("\n" + "\n".join(lines) + "\n" + PROMPT)
@@ -216,6 +226,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if watcher is not None:
             watcher.stop()
+            # 알림을 파일에서 꺼낸 뒤 출력하기 전에 프로세스가 끝나지 않도록 잠시 기다린다
+            watcher.join(timeout=1)
 
 
 if __name__ == "__main__":

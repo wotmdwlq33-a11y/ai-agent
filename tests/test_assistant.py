@@ -207,3 +207,20 @@ def test_status_without_key(cfg, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     answer = Jev(FakeClaude(), config=cfg).handle("설정 확인")
     assert "환경변수에 없음" in answer.text
+
+
+def test_empty_text_blocks_are_dropped_from_history(cfg):
+    class MixedClaude(FakeClaude):
+        def ask(self, messages, effort):
+            content = [
+                {"type": "thinking", "thinking": "", "signature": "s"},
+                {"type": "text", "text": ""},
+                {"type": "text", "text": "안녕"},
+            ]
+            return ClaudeReply("안녕", content)
+
+    jev = Jev(MixedClaude(), config=cfg)
+    jev.handle("안녕")
+    stored = jev.history[1]["content"]
+    assert [b["type"] for b in stored] == ["thinking", "text"]
+    assert stored[1]["text"] == "안녕"

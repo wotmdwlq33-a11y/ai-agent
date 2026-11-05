@@ -278,3 +278,15 @@ def test_version_flag(capsys):
         cli.main(["--version"])
     assert exc.value.code == 0
     assert capsys.readouterr().out.startswith("jev ")
+
+
+def test_reminder_watcher_does_not_repeat_same_error(tmp_path):
+    import threading
+
+    (tmp_path / "reminders.json").write_text("{broken", encoding="utf-8")
+    emitted = []
+    watcher = cli.ReminderWatcher(tmp_path, threading.Lock(), emitted.append)
+    for _ in range(3):
+        watcher.check_once()
+    assert len(emitted) == 1
+    assert "알림을 확인하지 못했어요" in emitted[0]

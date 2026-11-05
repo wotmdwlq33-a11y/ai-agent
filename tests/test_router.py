@@ -211,3 +211,7 @@ def test_debugging_is_high_effort():
 def test_noon_reminder_routes_locally():
     r = route("내일 정오에 점심 약속 알려줘")
     assert (r.target, r.skill) == ("local", "remind_add")
+
+
+def test_noon_inside_word_is_not_reminder():
+    assert route("정오표 수정 알림 맞춰줘").target == "claude"
