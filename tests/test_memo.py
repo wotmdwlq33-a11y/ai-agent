@@ -91,3 +91,28 @@ def test_wrong_shape_raises(tmp_path, content):
 def test_empty_file_is_empty(tmp_path):
     (tmp_path / "memos.json").write_text("\n", encoding="utf-8")
     assert memo.list_memos(tmp_path) == []
+
+
+def test_ids_not_reused_after_deleting_newest(tmp_path):
+    memo.add(tmp_path, "a", now=NOW)
+    memo.add(tmp_path, "b", now=NOW)
+    memo.delete(tmp_path, 2)
+    assert memo.add(tmp_path, "c", now=NOW).id == 3
+    memo.delete(tmp_path, 3)
+    memo.delete(tmp_path, 1)
+    assert memo.list_memos(tmp_path) == []
+    assert memo.add(tmp_path, "d", now=NOW).id == 4
+
+
+def test_reads_old_plain_list_files(tmp_path):
+    (tmp_path / "memos.json").write_text(
+        '[{"id": 5, "text": "옛 메모", "created_at": "2026-01-01T00:00:00+09:00"}]',
+        encoding="utf-8",
+    )
+    assert [m.text for m in memo.list_memos(tmp_path)] == ["옛 메모"]
+    assert memo.add(tmp_path, "새 메모", now=NOW).id == 6
+
+
+def test_naive_now_is_seoul(tmp_path):
+    saved = memo.add(tmp_path, "x", now=datetime(2026, 11, 5, 10, 0))
+    assert saved.created_at == "2026-11-05T10:00:00+09:00"

@@ -84,7 +84,6 @@ def test_route_is_backward_compatible():
         ("3번 메모 지워줘", "memo_delete", "3"),
         # 리마인더
         ("10분 뒤에 회의 알려줘", "remind_add", "10분 뒤에 회의"),
-        ("10분 뒤 회의 알려줘", "remind_add", "10분 뒤 회의"),
         ("내일 9시에 병원 가기 알려줘", "remind_add", "내일 9시에 병원 가기"),
         (
             "모레 오후 3시에 엄마한테 전화하라고 알려줘",
@@ -93,7 +92,8 @@ def test_route_is_backward_compatible():
         ),
         ("30초 뒤에 알려줘", "remind_add", "30초 뒤에"),
         ("25시에 회의 알려줘", "remind_add", "25시에 회의"),  # 시간 해석 실패도 로컬에서 안내
-        ("회의 리마인드 해줘", "remind_add", "회의"),
+        ("10분 뒤 회의 리마인드 해줘", "remind_add", "10분 뒤 회의"),
+        ("12월 25일 9시에 파티 알려줘", "remind_add", "12월 25일 9시에 파티"),
         ("내일 9시 회의 알림 맞춰줘", "remind_add", "내일 9시 회의"),
         ("리마인더: 내일 9시 회의", "remind_add", "내일 9시 회의"),
         ("알림 추가 10분 뒤 라면", "remind_add", "10분 뒤 라면"),
@@ -143,7 +143,50 @@ def test_new_local_skills(text, skill, args):
         "크리스마스까지 며칠 남았어?",
         "다음 공휴일에 어디 갈까?",
         "리마인더 앱 뭐가 좋아?",
+        # 리뷰에서 찾은 오분류 (회귀 테스트)
+        "메모 추가 기능 어떻게 써?",
+        "메모 추가 방법 알려줘",
+        "메모 검색 기능 좋은 앱 추천해줘",
+        "메모 찾기 단축키가 뭐야",
+        "뭐라고 메모해줘?",
+        "오늘 날짜 기준으로 계약 만료일 계산해줘",
+        "오늘 며칠 남았는지 계산해줘",
+        "3일 뒤 날씨 알려줘",
+        "1시간 후 환율 알려줘",
+        "2주 후 일정 알려줘",
+        "10분 뒤 회의 알려줘",  # '에'가 없으면 Claude (README 예시는 "10분 뒤에 회의 알려줘")
+        "알림 설정 방법 알려줘",
+        "리마인더 추가 앱 추천",
+        "카카오톡 알림 설정해줘",
+        "아이폰 알림 맞춰줘",
+        "회의 리마인드 해줘",  # 시간 표현이 없으면 Claude
     ],
 )
 def test_near_misses_go_to_claude(text):
     assert route(text).target == "claude"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["오늘 날짜", "오늘 날짜 알려줘", "오늘 며칠이야?", "오늘 무슨 요일이에요", "날짜 좀 알려줘"],
+)
+def test_date_endings(text):
+    assert route(text).skill == "date"
+
+
+@pytest.mark.parametrize(
+    "text, args",
+    [
+        ("고양이라고 메모해줘", "고양이"),
+        ("고양이 메모해줘", "고양이"),
+        ("회의라고 메모해줘", "회의"),
+        ("메모: 우유 뭐 사지?", "우유 뭐 사지?"),  # ':'를 쓴 명시적 형태는 그대로 메모
+    ],
+)
+def test_memo_add_args(text, args):
+    r = route(text)
+    assert (r.skill, r.args) == ("memo_add", args)
+
+
+def test_memo_search_colon_form_allows_any_text():
+    assert route("메모 검색: 앱").args == "앱"

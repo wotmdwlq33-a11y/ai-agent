@@ -6,12 +6,15 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from jev.korean import TIMEZONE
+from jev.korean import TIMEZONE, localize
 from jev.storage import StorageError, load_records, save_records
 
 MEMO_FILE = "memos.json"
 MAX_MEMO_LENGTH = 1000
 MAX_MEMOS = 1000
+# 파일은 메모 객체의 JSON 배열이다. 다음 번호를 기억하는 메타 레코드 {"_meta": {...}}가
+# 맨 앞에 있을 수 있다 (지운 번호를 다시 쓰지 않기 위해). 메타가 없는 예전 파일도 읽는다.
+_META = "_meta"
 
 
 class MemoError(ValueError):
@@ -30,9 +33,21 @@ def memo_path(data_dir: Path) -> Path:
 
 
 def _load(data_dir: Path) -> list[Memo]:
+    return _load_state(data_dir)[0]
+
+
+def _load_state(data_dir: Path) -> tuple[list[Memo], int]:
+    """(메모 목록, 다음에 쓸 번호)."""
     path = memo_path(data_dir)
     memos: list[Memo] = []
+    next_id = 1
     for record in load_records(path):
+        if _META in record:
+            meta = record[_META]
+            stored = meta.get("next_id") if isinstance(meta, dict) else None
+            if isinstance(stored, int) and not isinstance(stored, bool):
+                next_id = max(next_id, stored)
+            continue
         memo_id, text, created = record.get("id"), record.get("text"), record.get("created_at")
         if (
             not isinstance(memo_id, int)
@@ -45,11 +60,13 @@ def _load(data_dir: Path) -> list[Memo]:
                 "파일을 고치거나 다른 곳으로 옮긴 뒤 다시 시도해 주세요."
             )
         memos.append(Memo(memo_id, text, created))
-    return memos
+    next_id = max(next_id, max((m.id for m in memos), default=0) + 1)
+    return memos, next_id
 
 
-def _save(data_dir: Path, memos: list[Memo]) -> None:
-    save_records(memo_path(data_dir), [asdict(m) for m in memos])
+def _save(data_dir: Path, memos: list[Memo], next_id: int) -> None:
+    records = [{_META: {"next_id": next_id}}, *(asdict(m) for m in memos)]
+    save_records(memo_path(data_dir), records)
 
 
 def add(data_dir: Path, text: str, now: datetime | None = None) -> Memo:
@@ -61,18 +78,18 @@ def add(data_dir: Path, text: str, now: datetime | None = None) -> Memo:
         raise MemoError(
             f"메모가 너무 길어요. {MAX_MEMO_LENGTH}자 이하로 줄여 주세요. (지금 {len(text)}자)"
         )
-    memos = _load(data_dir)
+    memos, next_id = _load_state(data_dir)
     if len(memos) >= MAX_MEMOS:
         raise MemoError(
             f"메모는 최대 {MAX_MEMOS}개까지 저장할 수 있어요. 안 쓰는 메모를 먼저 지워 주세요."
         )
-    created = (now or datetime.now(TIMEZONE)).astimezone(TIMEZONE)
+    created = localize(now or datetime.now(TIMEZONE))
     memo = Memo(
-        id=max((m.id for m in memos), default=0) + 1,
+        id=next_id,
         text=text,
         created_at=created.replace(microsecond=0).isoformat(),
     )
-    _save(data_dir, [*memos, memo])
+    _save(data_dir, [*memos, memo], next_id + 1)
     return memo
 
 
@@ -91,9 +108,9 @@ def search(data_dir: Path, query: str) -> list[Memo]:
 
 def delete(data_dir: Path, memo_id: int) -> Memo | None:
     """메모를 지우고 지운 메모를 돌려준다. 없는 번호면 None."""
-    memos = _load(data_dir)
+    memos, next_id = _load_state(data_dir)
     for memo in memos:
         if memo.id == memo_id:
-            _save(data_dir, [m for m in memos if m.id != memo_id])
+            _save(data_dir, [m for m in memos if m.id != memo_id], next_id)
             return memo
     return None

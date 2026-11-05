@@ -204,3 +204,47 @@ def test_relative_minutes_round_up_to_whole_minute():
     assert parse_korean_time("10분 뒤", now) == datetime(2026, 11, 5, 13, 1, tzinfo=TIMEZONE)
     # 초를 말하면 그대로 더한다
     assert parse_korean_time("30초 뒤", now) == now + timedelta(seconds=30)
+
+
+class TestCalendarDates:
+    def test_month_day(self):
+        assert parse_korean_time("12월 25일 9시", NOW) == at(12, 25, 9)
+        assert parse_korean_time("12월 25일 오후 3시", NOW) == at(12, 25, 15)
+        assert parse_korean_time("12월 25일 3시", NOW) == at(12, 25, 15)  # 다른 날 1~6시는 오후
+
+    def test_month_day_passed_rolls_to_next_year(self):
+        assert parse_korean_time("3월 1일 10시", NOW) == at(3, 1, 10, year=2027)
+        # 오늘 날짜인데 시각이 지났으면 내년
+        assert parse_korean_time("11월 5일 9시", NOW) == at(11, 5, 9, year=2027)
+        assert parse_korean_time("11월 5일 오후 9시", NOW) == at(11, 5, 21)
+
+    def test_explicit_year_does_not_roll(self):
+        assert parse_korean_time("2026년 3월 1일 10시", NOW) == at(3, 1, 10)
+        assert parse_korean_time("2027년 1월 2일 오전 8시", NOW) == at(1, 2, 8, year=2027)
+
+    def test_next_and_this_month(self):
+        assert parse_korean_time("다음 달 3일 10시", NOW) == at(12, 3, 10)
+        assert parse_korean_time("담달 3일 10시", NOW) == at(12, 3, 10)
+        assert parse_korean_time("이번 달 20일 오후 2시", NOW) == at(11, 20, 14)
+        december = at(12, 10, 9)
+        assert parse_korean_time("다음 달 3일 10시", december) == at(1, 3, 10, year=2027)
+
+    @pytest.mark.parametrize("text", ["2월 30일 9시", "13월 1일 9시", "다음 달 31일 9시"])
+    def test_invalid_dates(self, text):
+        # '다음 달 31일'은 10월 기준(→ 11월 31일)으로 확인한다
+        now = at(10, 5, 10) if text.startswith("다음 달") else NOW
+        assert parse_korean_time(text, now) is None
+
+    def test_span_covers_date(self):
+        text = "12월 25일 9시에 파티"
+        found = find_korean_time(text, NOW)
+        assert found is not None
+        assert text[found.start : found.end] == "12월 25일 9시"
+
+
+def test_pm_zero_is_noon():
+    assert parse_korean_time("오후 0시 30분", NOW) == at(11, 5, 12, 30)
+    assert parse_korean_time("낮 0시", NOW) == at(11, 5, 12)
+    assert parse_korean_time("내일 오후 0시 30분", NOW) == at(11, 6, 12, 30)
+    assert parse_korean_time("오늘 밤 0시", NOW) == at(11, 6, 0)
+    assert parse_korean_time("오전 0시 30분", NOW) == at(11, 6, 0, 30)

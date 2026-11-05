@@ -5,7 +5,8 @@
 * 상대 시간: "30초 뒤", "10분 후", "2시간 뒤", "1시간 30분 뒤", "1시간 반 뒤",
   "3일 뒤", "2주 후", "10분 있다가"
 * 날짜 + 시각: "오늘/내일/모레/글피", "N일 뒤", "월요일", "이번 주 금요일",
-  "다음 주(담주) 월요일", "다다음 주 화요일" 뒤에 시각이 붙은 것
+  "다음 주(담주) 월요일", "다다음 주 화요일", "12월 25일", "2027년 1월 2일",
+  "다음 달(담달) 3일", "이번 달 20일" 뒤에 시각이 붙은 것
 * 시각: "9시", "9시 반", "7시 30분", "14:30", 앞에 오전/오후 등의 때를 붙일 수 있음
 
 날짜 단어만 있고 시각이 없으면("내일", "다음 주 월요일") 인식하지 않는다.
@@ -14,10 +15,10 @@
 시각 해석 규칙
 --------------
 * 새벽/아침/오전 = 오전. "오전 12시" = 0시.
-* 오후/낮/점심/저녁 = 오후 (1~11시에 12를 더함). "오후 12시" = 12시(정오).
+* 오후/낮/점심/저녁 = 오후 (1~11시에 12를 더함). "오후 12시"·"오후 0시" = 12시(정오).
 * 밤 6~11시 = 18~23시. 밤 12시 = 그 날이 끝나는 자정, 즉 다음 날 0시.
   밤 1~5시 = 다음 날 새벽 1~5시 ("오늘 밤 1시" = 내일 01:00).
-  "저녁 12시"도 밤 12시와 같이 다음 날 0시로 본다.
+  "저녁 12시", "밤 0시", "저녁 0시"도 밤 12시와 같이 다음 날 0시로 본다.
 * 날짜 없이 시각만 있으면 지금 이후 가장 가까운 그 시각(이미 지났으면 내일).
   "밤 12시", "밤 1시"도 이 경우엔 '다음에 오는 0시/1시'다.
 * 오전/오후 없는 "N시":
@@ -29,6 +30,8 @@
     7~11시는 오전으로 본다. 새벽 약속은 드물기 때문.
 * 요일만("금요일 3시"): 이번 주 그 요일이 오늘 이후면 그 날, 오늘이 그 요일인데
   시각이 이미 지났거나 이미 지난 요일이면 다음 주.
+* 연도 없는 "M월 D일": 그 시각이 이미 지났으면 내년. 연도를 쓰거나 "이번 달 D일"이면
+  지났어도 그대로 둔다. 없는 날짜("2월 30일", "다음 달 31일"이 없는 달)는 인식하지 않는다.
 """
 
 from __future__ import annotations
@@ -43,7 +46,9 @@ _AM = {"새벽", "아침", "오전"}
 _PM = {"오후", "낮", "점심", "저녁"}
 
 _DAY = (
-    r"(?P<day>오늘|내일|모레|글피)"
+    r"(?<!\d)(?:(?P<year>\d{4})\s*년\s*)?(?P<month>\d{1,2})\s*월\s*(?P<mday>\d{1,2})\s*일(?:에|날)?"
+    r"|(?P<mrel>다음\s*달|담달|이번\s*달)\s*(?P<mday2>\d{1,2})\s*일(?:에|날)?"
+    r"|(?P<day>오늘|내일|모레|글피)"
     r"|(?<!\d)(?P<ndays>\d{1,3})\s*일\s*(?:뒤|후)(?:에)?"
     r"|(?:(?P<week>다다음\s*주|다음\s*주|담주|이번\s*주)\s*)?(?P<wd>[월화수목금토일])요일(?:에|날)?"
 )
@@ -86,8 +91,10 @@ def _apply_period(hour: int, period: str) -> tuple[int, int] | None:
         if hour > 12:
             return None
         return (0 if hour == 12 else hour), 0
-    if hour >= 13 or hour == 0:  # "오후 15시"처럼 24시간제를 같이 쓴 경우는 그대로
+    if hour >= 13:  # "오후 15시"처럼 24시간제를 같이 쓴 경우는 그대로
         return hour, 0
+    if hour == 0:  # 오후 0시 = 정오, 저녁/밤 0시 = 다음 날 0시
+        return (12, 0) if period in ("오후", "낮", "점심") else (0, 1)
     if period in _PM:
         if hour == 12:
             return (0, 1) if period == "저녁" else (12, 0)
@@ -124,21 +131,33 @@ def _resolve_relative(m: re.Match[str], now: datetime) -> datetime | None:
         return None
 
 
-def _explicit_day(m: re.Match[str], today: date) -> tuple[date, bool] | None:
-    """(날짜, 요일만 말해서 다음 주로 넘길 수 있는지). 날짜가 없으면 None."""
+def _explicit_day(m: re.Match[str], today: date) -> tuple[date, str | None] | None:
+    """(날짜, 지났을 때 넘길 단위 "week"/"year"/None). 날짜가 없으면 None.
+
+    없는 날짜(2월 30일 등)면 ValueError.
+    """
+    if m.group("month"):
+        year = m.group("year")
+        when = date(int(year) if year else today.year, int(m.group("month")), int(m.group("mday")))
+        return when, None if year else "year"
+    if m.group("mrel"):
+        y, mo = today.year, today.month
+        if re.sub(r"\s+", "", m.group("mrel")) != "이번달":
+            y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
+        return date(y, mo, int(m.group("mday2"))), None
     if m.group("day"):
         offset = {"오늘": 0, "내일": 1, "모레": 2, "글피": 3}[m.group("day")]
-        return today + timedelta(days=offset), False
+        return today + timedelta(days=offset), None
     if m.group("ndays"):
-        return today + timedelta(days=int(m.group("ndays"))), False
+        return today + timedelta(days=int(m.group("ndays"))), None
     if m.group("wd"):
         target = WEEKDAYS.index(m.group("wd"))
         week = re.sub(r"\s+", "", m.group("week") or "")
         if not week:
-            return today + timedelta(days=(target - today.weekday()) % 7), True
+            return today + timedelta(days=(target - today.weekday()) % 7), "week"
         monday = today - timedelta(days=today.weekday())
         weeks_ahead = {"이번주": 0, "다음주": 1, "담주": 1, "다다음주": 2}[week]
-        return monday + timedelta(weeks=weeks_ahead, days=target), False
+        return monday + timedelta(weeks=weeks_ahead, days=target), None
     return None
 
 
@@ -153,7 +172,10 @@ def _resolve_absolute(m: re.Match[str], now: datetime) -> datetime | None:
 
     today = now.date()
     period = m.group("period")
-    day = _explicit_day(m, today)
+    try:
+        day = _explicit_day(m, today)
+    except ValueError:
+        return None
 
     if period:
         converted = _apply_period(hour, period)
@@ -163,13 +185,7 @@ def _resolve_absolute(m: re.Match[str], now: datetime) -> datetime | None:
         if day is None:
             candidate = _at(today, hour24, minute)
             return candidate if candidate > now else candidate + timedelta(days=1)
-        target, rollable = day
-        candidate = _at(target + timedelta(days=shift), hour24, minute)
-        if rollable and candidate <= now:
-            candidate += timedelta(weeks=1)
-        return candidate
-
-    if day is None:
+    elif day is None:
         if 1 <= hour <= 11:
             for h in (hour, hour + 12):
                 candidate = _at(today, h, minute)
@@ -178,17 +194,27 @@ def _resolve_absolute(m: re.Match[str], now: datetime) -> datetime | None:
             return _at(today + timedelta(days=1), hour, minute)
         candidate = _at(today, hour, minute)
         return candidate if candidate > now else candidate + timedelta(days=1)
+    else:
+        hour24, shift = hour, 0
+        if 1 <= hour <= 11:
+            if m.group("day") == "오늘":
+                am = _at(today, hour, minute)
+                return am if am > now else _at(today, hour + 12, minute)
+            if hour <= 6:
+                hour24 = hour + 12
 
-    target, rollable = day
-    if 1 <= hour <= 11:
-        if m.group("day") == "오늘":
-            am = _at(today, hour, minute)
-            return am if am > now else _at(today, hour + 12, minute)
-        if hour <= 6:
-            hour += 12
-    candidate = _at(target, hour, minute)
-    if rollable and candidate <= now:
-        candidate += timedelta(weeks=1)
+    assert day is not None  # 날짜가 없는 경우는 위에서 모두 돌려줬다
+    target, roll = day
+    candidate = _at(target + timedelta(days=shift), hour24, minute)
+    if candidate <= now:
+        if roll == "week":
+            candidate += timedelta(weeks=1)
+        elif roll == "year":
+            try:
+                target = target.replace(year=target.year + 1)
+            except ValueError:  # 2월 29일
+                return None
+            candidate = _at(target + timedelta(days=shift), hour24, minute)
     return candidate
 
 
@@ -214,6 +240,11 @@ def parse_korean_time(text: str, now: datetime) -> datetime | None:
     """text 안의 시간 표현을 Asia/Seoul 시각으로 바꾼다. 못 찾으면 None."""
     found = find_korean_time(text, now)
     return found.when if found else None
+
+
+def has_time_expression(text: str) -> bool:
+    """text 어딘가에 시간 표현 모양이 있는지 (값이 맞는지는 따지지 않음). 라우터가 쓴다."""
+    return bool(_ABS_RE.search(text) or _REL_RE.search(text))
 
 
 def leading_time(text: str) -> tuple[int, bool] | None:

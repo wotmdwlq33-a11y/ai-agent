@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jev.config import default_data_dir
 from jev.korean import TIMEZONE as TIMEZONE  # 하위 호환: local_skills.TIMEZONE
-from jev.korean import WEEKDAYS, format_date, josa
+from jev.korean import WEEKDAYS, format_date, josa, localize
 from jev.korean import now as now
 from jev.router import route
 from jev.skills import memo, reminders, timeparse, units
@@ -43,7 +43,7 @@ def run(
     args에는 라우터가 뽑은 인자(Route.args)를 넘긴다. args 없이 text(사용자 원문)만
     주면 라우터를 다시 돌려 인자를 뽑는다. data_dir이 None이면 ~/.jev 를 쓴다.
     """
-    current = current or now()
+    current = localize(current or now())
     if skill == "time":
         return f"지금은 {current:%H시 %M분}이에요."
     if skill == "date":
@@ -131,13 +131,22 @@ def _task_text(args: str, start: int, end: int) -> str:
     return re.sub(r"\s+", " ", f"{args[:start]} {after}").strip()
 
 
+_REMIND_UNPARSED = (
+    "언제 알려드릴지 이해하지 못했어요. "
+    "'10분 뒤에 회의 알려줘'나 '내일 9시에 병원 가기 알려줘'처럼 말해 주세요."
+)
+_DATEISH = re.compile(
+    r"\d+\s*[월일]|\d+\s*[-./]\s*\d+|다음\s*달|이번\s*달|오늘|내일|모레|글피|요일"
+)
+
+
 def _remind_add(args: str, current: datetime, data_dir: Path) -> str:
     found = timeparse.find_korean_time(args, current)
     if found is None:
-        return (
-            "언제 알려드릴지 이해하지 못했어요. "
-            "'10분 뒤에 회의 알려줘'나 '내일 9시에 병원 가기 알려줘'처럼 말해 주세요."
-        )
+        return _REMIND_UNPARSED
+    if _DATEISH.search(args[: found.start]):
+        # "12월 32일 9시에 …"처럼 앞의 날짜를 못 읽었는데 시각만 쓰면 엉뚱한 날이 된다
+        return _REMIND_UNPARSED
     due = found.when.replace(microsecond=0)
     if due <= current:
         return "그 시간은 이미 지났어요. 앞으로의 시간을 말해 주세요."

@@ -95,7 +95,15 @@ def test_reminder_with_explicit_keyword_and_time_in_middle(tmp_path):
     assert answer == "알겠어요! 내일 오전 9시에 '회의' 알려드릴게요."
 
 
-@pytest.mark.parametrize("text", ["25시에 회의 알려줘", "회의 리마인드 해줘"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "25시에 회의 알려줘",
+        "25시 회의 리마인드 해줘",
+        "12월 32일 9시에 파티 리마인드 해줘",
+        "32일 9시에 파티 리마인드 해줘",  # 못 읽은 날짜 뒤의 시각만 쓰지 않는다
+    ],
+)
 def test_reminder_unparseable_time_stays_local(tmp_path, text):
     assert "이해하지 못했어요" in say(text, tmp_path)
     assert reminders.list_pending(tmp_path, NOW) == []
@@ -214,3 +222,42 @@ def test_real_holiday_data_smoke(tmp_path):
     pytest.importorskip("jev.skills.holidays")
     answer = say("다음 공휴일", tmp_path)
     assert answer.startswith("다음 공휴일은 2026년 12월 25일(금)")
+
+
+def test_reminder_with_calendar_date(tmp_path):
+    assert say("12월 25일 9시에 파티 리마인드 해줘", tmp_path) == (
+        "알겠어요! 12월 25일(금) 오전 9시에 '파티' 알려드릴게요."
+    )
+    assert say("다음 달 3일 오후 2시에 치과 알려줘", tmp_path) == (
+        "알겠어요! 12월 3일(목) 오후 2시에 '치과' 알려드릴게요."
+    )
+    due = reminders.list_pending(tmp_path, NOW)
+    assert [r.due.date() for r in due] == [date(2026, 12, 3), date(2026, 12, 25)]
+
+
+def test_naive_current_is_treated_as_seoul(tmp_path):
+    naive = datetime(2026, 11, 5, 10, 0)
+    assert local_skills.run("time", naive) == "지금은 10시 00분이에요."
+    answer = local_skills.run("remind_add", naive, text="10분 뒤에 회의 알려줘", data_dir=tmp_path)
+    assert answer == "알겠어요! 오늘 오전 10시 10분에 '회의' 알려드릴게요."
+    assert local_skills.run("memo_add", naive, text="메모: 우유", data_dir=tmp_path).endswith(
+        "우유"
+    )
+    from jev.skills import memo
+
+    assert memo.list_memos(tmp_path)[0].created_at == "2026-11-05T10:00:00+09:00"
+
+
+def test_memo_ids_not_reused_after_deleting_newest(tmp_path):
+    say("메모: a", tmp_path)
+    say("메모: b", tmp_path)
+    assert say("메모 삭제 2", tmp_path) == "#2 메모를 지웠어요: b"
+    assert say("메모: c", tmp_path) == "메모했어요 (#3): c"
+
+
+def test_memo_keeps_word_ending_in_i(tmp_path):
+    assert say("고양이라고 메모해줘", tmp_path) == "메모했어요 (#1): 고양이"
+
+
+def test_convert_huge_number(tmp_path):
+    assert say("1" + "0" * 400 + "km는 몇 마일", tmp_path) == "숫자가 너무 커서 계산할 수 없어요."

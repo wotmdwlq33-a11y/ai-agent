@@ -118,3 +118,17 @@ def test_reply(text, expected):
 
 def test_reply_unparseable():
     assert "이해하지 못했어요" in units.reply("아무 말")
+
+
+def test_non_finite_rejected():
+    with pytest.raises(ConversionError, match="너무 커서"):
+        convert(float("inf"), "km", "mi")
+    with pytest.raises(ConversionError, match="너무 커서"):
+        convert(1e308, "km", "mm")  # 결과가 inf
+    assert units.reply("1" + "0" * 400 + "km는 몇 마일") == "숫자가 너무 커서 계산할 수 없어요."
+
+
+def test_milli_means_milliliter():
+    req = parse_request("500밀리는 몇 리터")
+    assert req is not None
+    assert (req.src, req.dst) == ("ml", "l")

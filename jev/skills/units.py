@@ -61,7 +61,7 @@ UNITS: dict[str, Unit] = {
 }
 
 _ALIASES: dict[str, list[str]] = {
-    "mm": ["mm", "밀리미터", "밀리"],
+    "mm": ["mm", "밀리미터"],
     "cm": ["cm", "센티미터", "센티", "센치"],
     "m": ["m", "meter", "meters", "미터"],
     "km": ["km", "kilometer", "kilometers", "킬로미터"],
@@ -79,7 +79,7 @@ _ALIASES: dict[str, list[str]] = {
     "K": ["K", "kelvin", "켈빈"],
     "m2": ["m2", "m²", "㎡", "sqm", "제곱미터", "평방미터"],
     "평": ["평"],
-    "ml": ["ml", "mL", "cc", "밀리리터"],
+    "ml": ["ml", "mL", "cc", "밀리리터", "밀리"],  # 말로 하는 "500밀리"는 보통 ml
     "l": ["l", "L", "liter", "liters", "litre", "litres", "리터"],
     "gal": ["gal", "gallon", "gallons", "갤런"],
 }
@@ -163,6 +163,8 @@ def _from_kelvin(kelvin: float, key: str) -> float:
 
 def convert(value: float, src: str, dst: str) -> float:
     """value를 src 단위에서 dst 단위로 바꾼다 (UNITS 키). 차원이 다르면 ConversionError."""
+    if not math.isfinite(value):
+        raise ConversionError("숫자가 너무 커서 계산할 수 없어요.")
     try:
         a, b = UNITS[src], UNITS[dst]
     except KeyError as e:
@@ -178,7 +180,10 @@ def convert(value: float, src: str, dst: str) -> float:
         if kelvin < -1e-9:
             raise ConversionError("절대영도(섭씨 -273.15도)보다 낮은 온도는 없어요.")
         return _from_kelvin(kelvin, dst)
-    return value * a.factor / b.factor
+    result = value * a.factor / b.factor
+    if not math.isfinite(result):
+        raise ConversionError("숫자가 너무 커서 계산할 수 없어요.")
+    return result
 
 
 def format_number(x: float) -> str:
