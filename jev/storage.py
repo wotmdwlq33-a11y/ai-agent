@@ -18,11 +18,27 @@ try:  # POSIX
 except ImportError:  # pragma: no cover - Windows
     fcntl = None  # type: ignore[assignment]
 
-__all__ = ["StorageError", "file_lock", "load_records", "save_records", "write_json_atomic"]
+__all__ = [
+    "StorageError",
+    "ensure_private_dir",
+    "file_lock",
+    "load_records",
+    "save_records",
+    "write_json_atomic",
+]
 
 
 class StorageError(RuntimeError):
     """저장 파일을 읽거나 쓸 수 없을 때. 메시지는 사용자에게 그대로 보여줘도 된다."""
+
+
+def ensure_private_dir(path: Path) -> None:
+    """폴더가 없으면 만든다. 새로 만드는 폴더는 본인만 볼 수 있게(700) 한다.
+
+    대화 기록과 메모가 들어가므로 다른 사용자가 목록을 보지 못하게 한다.
+    이미 있는 폴더의 권한은 바꾸지 않는다.
+    """
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
@@ -62,7 +78,7 @@ def save_records(path: Path, records: list[dict[str, Any]]) -> None:
 def write_json_atomic(path: Path, data: Any, indent: int = 2) -> None:
     """data를 JSON으로 path에 원자적으로 쓴다. 실패하면 StorageError."""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(path.parent)
         fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     except OSError as e:
         raise StorageError(f"저장 파일({path})을 쓸 수 없어요: {e}") from e
@@ -91,8 +107,9 @@ def file_lock(path: Path) -> Iterator[None]:
     """
     lock_path = path.with_name(path.name + ".lock")
     try:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        handle = open(lock_path, "a+b")  # noqa: SIM115 - 아래 finally에서 닫는다
+        ensure_private_dir(lock_path.parent)
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        handle = os.fdopen(fd, "r+b")
     except OSError as e:
         raise StorageError(f"잠금 파일({lock_path})을 만들 수 없어요: {e}") from e
     try:

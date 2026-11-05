@@ -75,3 +75,19 @@ def test_file_lock_creates_parent_and_releases(tmp_path):
     with file_lock(path):  # 다시 잡을 수 있다
         pass
     assert (tmp_path / "new" / "data.json.lock").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX 권한")
+def test_new_data_files_are_private(tmp_path):
+    import stat
+
+    path = tmp_path / "data" / "items.json"
+    with file_lock(path):
+        save_records(path, [{"a": 1}])
+
+    def mode(p):
+        return stat.S_IMODE(p.stat().st_mode)
+
+    assert mode(path.parent) & 0o077 == 0
+    assert mode(path) == 0o600
+    assert mode(path.with_name("items.json.lock")) & 0o077 == 0
