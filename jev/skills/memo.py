@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from jev.korean import TIMEZONE, localize
-from jev.storage import StorageError, load_records, save_records
+from jev.storage import StorageError, file_lock, load_records, save_records
 
 MEMO_FILE = "memos.json"
 MAX_MEMO_LENGTH = 1000
@@ -81,18 +81,19 @@ def add(data_dir: Path, text: str, now: datetime | None = None) -> Memo:
         raise MemoError(
             f"메모가 너무 길어요. {MAX_MEMO_LENGTH}자 이하로 줄여 주세요. (지금 {len(text)}자)"
         )
-    memos, next_id = _load_state(data_dir)
-    if len(memos) >= MAX_MEMOS:
-        raise MemoError(
-            f"메모는 최대 {MAX_MEMOS}개까지 저장할 수 있어요. 안 쓰는 메모를 먼저 지워 주세요."
-        )
     created = localize(now or datetime.now(TIMEZONE))
-    memo = Memo(
-        id=next_id,
-        text=text,
-        created_at=created.replace(microsecond=0).isoformat(),
-    )
-    _save(data_dir, [*memos, memo], next_id + 1)
+    with file_lock(memo_path(data_dir)):
+        memos, next_id = _load_state(data_dir)
+        if len(memos) >= MAX_MEMOS:
+            raise MemoError(
+                f"메모는 최대 {MAX_MEMOS}개까지 저장할 수 있어요. 안 쓰는 메모를 먼저 지워 주세요."
+            )
+        memo = Memo(
+            id=next_id,
+            text=text,
+            created_at=created.replace(microsecond=0).isoformat(),
+        )
+        _save(data_dir, [*memos, memo], next_id + 1)
     return memo
 
 
@@ -111,9 +112,10 @@ def search(data_dir: Path, query: str) -> list[Memo]:
 
 def delete(data_dir: Path, memo_id: int) -> Memo | None:
     """메모를 지우고 지운 메모를 돌려준다. 없는 번호면 None."""
-    memos, next_id = _load_state(data_dir)
-    for memo in memos:
-        if memo.id == memo_id:
-            _save(data_dir, [m for m in memos if m.id != memo_id], next_id)
-            return memo
+    with file_lock(memo_path(data_dir)):
+        memos, next_id = _load_state(data_dir)
+        for memo in memos:
+            if memo.id == memo_id:
+                _save(data_dir, [m for m in memos if m.id != memo_id], next_id)
+                return memo
     return None

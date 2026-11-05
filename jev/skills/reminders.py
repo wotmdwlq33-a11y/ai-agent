@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from jev.korean import localize
-from jev.storage import StorageError, load_records, save_records
+from jev.storage import StorageError, file_lock, load_records, save_records
 
 REMINDER_FILE = "reminders.json"
 MAX_REMINDER_LENGTH = 1000
@@ -68,11 +68,12 @@ def add(data_dir: Path, text: str, due: datetime) -> Reminder:
         raise ReminderError("알려드릴 내용이 비어 있어요.")
     if len(text) > MAX_REMINDER_LENGTH:
         raise ReminderError(f"알림 내용이 너무 길어요. {MAX_REMINDER_LENGTH}자 이하로 줄여 주세요.")
-    items = _load(data_dir)
-    if len(items) >= MAX_REMINDERS:
-        raise ReminderError(f"알림은 최대 {MAX_REMINDERS}개까지 저장할 수 있어요.")
-    reminder = Reminder(text, localize(due), max((r.id for r in items), default=0) + 1)
-    _save(data_dir, [*items, reminder])
+    with file_lock(reminder_path(data_dir)):
+        items = _load(data_dir)
+        if len(items) >= MAX_REMINDERS:
+            raise ReminderError(f"알림은 최대 {MAX_REMINDERS}개까지 저장할 수 있어요.")
+        reminder = Reminder(text, localize(due), max((r.id for r in items), default=0) + 1)
+        _save(data_dir, [*items, reminder])
     return reminder
 
 
@@ -88,8 +89,12 @@ def pop_due(data_dir: Path, now: datetime) -> list[Reminder]:
     파일이 없으면 빈 목록. 파일이 깨졌으면 StorageError (파일은 건드리지 않음).
     """
     now = localize(now)
-    items = _load(data_dir)
-    due = sorted((r for r in items if r.due <= now), key=lambda r: r.due)
-    if due:
-        _save(data_dir, [r for r in items if r.due > now])
+    path = reminder_path(data_dir)
+    if not path.exists():
+        return []  # 알림이 없으면 잠금 파일도 만들지 않는다
+    with file_lock(path):
+        items = _load(data_dir)
+        due = sorted((r for r in items if r.due <= now), key=lambda r: r.due)
+        if due:
+            _save(data_dir, [r for r in items if r.due > now])
     return due

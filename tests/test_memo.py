@@ -23,7 +23,8 @@ def test_add_and_list(tmp_path):
     assert memo.list_memos(data_dir) == [first, second]
     assert (data_dir / "memos.json").exists()
     # 임시 파일이 남지 않는다
-    assert [p.name for p in data_dir.iterdir()] == ["memos.json"]
+    # 임시 파일이 남지 않는다 (잠금 파일만 있음)
+    assert sorted(p.name for p in data_dir.iterdir()) == ["memos.json", "memos.json.lock"]
 
 
 def test_file_is_utf8_json(tmp_path):

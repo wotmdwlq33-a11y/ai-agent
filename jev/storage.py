@@ -9,10 +9,16 @@ import contextlib
 import json
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-__all__ = ["StorageError", "load_records", "save_records", "write_json_atomic"]
+try:  # POSIX
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None  # type: ignore[assignment]
+
+__all__ = ["StorageError", "file_lock", "load_records", "save_records", "write_json_atomic"]
 
 
 class StorageError(RuntimeError):
@@ -73,3 +79,28 @@ def write_json_atomic(path: Path, data: Any, indent: int = 2) -> None:
         if isinstance(e, OSError):
             raise StorageError(f"저장 파일({path})을 쓸 수 없어요: {e}") from e
         raise
+
+
+@contextlib.contextmanager
+def file_lock(path: Path) -> Iterator[None]:
+    """path를 읽고-고치고-쓰는 동안 다른 프로세스가 같은 파일을 고치지 못하게 잠근다.
+
+    `<파일 이름>.lock` 파일에 배타적 잠금(fcntl.flock)을 건다. 예를 들어 REPL의 알림 스레드와
+    따로 실행한 `jev 메모: …`가 동시에 파일을 고쳐 한쪽 변경이 사라지는 것을 막는다.
+    fcntl이 없는 환경(Windows)에서는 잠그지 않는다.
+    """
+    lock_path = path.with_name(path.name + ".lock")
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(lock_path, "a+b")  # noqa: SIM115 - 아래 finally에서 닫는다
+    except OSError as e:
+        raise StorageError(f"잠금 파일({lock_path})을 만들 수 없어요: {e}") from e
+    try:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        if fcntl is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
