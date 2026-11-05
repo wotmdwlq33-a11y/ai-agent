@@ -132,6 +132,7 @@ python -m ruff check .            # 린트
 python -m ruff format --check .   # 포맷 검사
 python -m mypy                    # 타입 검사 (strict)
 python -m pytest -q               # 테스트 (API 키 불필요)
+python -m pytest --cov=jev        # 커버리지 확인
 ```
 
 GitHub Actions(`.github/workflows/ci.yml`)가 Python 3.11 / 3.12 / 3.13에서 위 검사를 모두 실행합니다.

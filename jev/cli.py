@@ -53,6 +53,23 @@ def _due_reminders(data_dir: Path) -> list[str]:
     return [f"⏰ 알림: {r.text} ({format_korean_datetime(r.due, current)})" for r in due]
 
 
+def error_message(error: BaseException) -> str | None:
+    """사용자에게 보여 줄 오류 문구. 예상하지 못한 오류면 None (그대로 올려 보낸다)."""
+    if isinstance(error, ConfigError):
+        return f"설정 오류 — {error}"
+    if isinstance(error, anthropic.AuthenticationError):
+        return "Claude 인증에 실패했어요. ANTHROPIC_API_KEY를 확인해 주세요."
+    if isinstance(error, anthropic.RateLimitError):
+        return "요청이 너무 많아요. 잠시 후 다시 시도해 주세요."
+    if isinstance(error, anthropic.APIStatusError):
+        return f"Claude API 오류가 났어요 ({error.status_code})."
+    if isinstance(error, anthropic.APIConnectionError):
+        return "네트워크 연결을 확인해 주세요."
+    if isinstance(error, StorageError):
+        return str(error)
+    return None
+
+
 def respond(jev: Jev, text: str, *, stream: bool, debug: bool, out: Output, write: Output) -> None:
     """입력 한 줄을 처리하고 결과를 출력한다. 오류는 사용자에게 알리고 계속 진행한다."""
     started = False
@@ -70,23 +87,12 @@ def respond(jev: Jev, text: str, *, stream: bool, debug: bool, out: Output, writ
         # 답변 도중 Ctrl+C: 이번 답변만 멈추고 대화는 계속한다. 기록에는 남지 않는다.
         out(("\n" if started else "") + "Jev: (답변을 중단했어요)")
         return
-    except ConfigError as e:
-        out(f"\nJev: 설정 오류 — {e}" if started else f"Jev: 설정 오류 — {e}")
-        return
-    except anthropic.AuthenticationError:
-        out("Jev: Claude 인증에 실패했어요. ANTHROPIC_API_KEY를 확인해 주세요.")
-        return
-    except anthropic.RateLimitError:
-        out("Jev: 요청이 너무 많아요. 잠시 후 다시 시도해 주세요.")
-        return
-    except anthropic.APIStatusError as e:
-        out(f"Jev: Claude API 오류가 났어요 ({e.status_code}).")
-        return
-    except anthropic.APIConnectionError:
-        out(("\n" if started else "") + "Jev: 네트워크 연결을 확인해 주세요.")
-        return
-    except HistoryError as e:
-        out(f"\nJev: {e}")
+    except Exception as e:
+        message = error_message(e)
+        if message is None:
+            raise
+        # 스트리밍 중이었다면 부분 답변 다음 줄에 오류를 쓴다
+        out(("\n" if started else "") + f"Jev: {message}")
         return
 
     if debug:

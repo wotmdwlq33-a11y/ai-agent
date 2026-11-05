@@ -1,5 +1,6 @@
 import builtins
 
+import anthropic
 import pytest
 
 from jev import cli
@@ -120,3 +121,63 @@ def test_corrupt_reminders_file_does_not_crash(tmp_path):
     (tmp_path / "reminders.json").write_text("{broken", encoding="utf-8")
     (line,) = cli._due_reminders(tmp_path)
     assert "알림을 확인하지 못했어요" in line
+
+
+def _api_error(cls, status):
+    import httpx2
+
+    request = httpx2.Request("POST", "https://api.example.invalid/v1/messages")
+    if cls is anthropic.APIConnectionError:
+        return cls(request=request)
+    return cls("오류", response=httpx2.Response(status, request=request), body=None)
+
+
+class RaisingClaude(FakeClaude):
+    def __init__(self, error, partial=None):
+        super().__init__()
+        self.error = error
+        self.partial = partial
+
+    def ask_stream(self, messages, effort, on_text):
+        if self.partial:
+            on_text(self.partial)
+        raise self.error
+
+
+@pytest.mark.parametrize(
+    "cls, status, fragment",
+    [
+        (anthropic.AuthenticationError, 401, "ANTHROPIC_API_KEY"),
+        (anthropic.RateLimitError, 429, "잠시 후"),
+        (anthropic.InternalServerError, 500, "(500)"),
+        (anthropic.APIConnectionError, 0, "네트워크"),
+    ],
+)
+def test_api_errors_are_explained(tmp_path, cls, status, fragment):
+    jev = Jev(RaisingClaude(_api_error(cls, status)), config=Config(model=None, data_dir=tmp_path))
+    cap = Capture()
+    cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
+    assert fragment in cap.text
+    assert jev.history == []
+
+
+def test_connection_error_mid_stream_starts_new_line(tmp_path):
+    error = _api_error(anthropic.APIConnectionError, 0)
+    jev = Jev(RaisingClaude(error, partial="앞부분"), config=Config(model=None, data_dir=tmp_path))
+    cap = Capture()
+    cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
+    assert cap.text.startswith("Jev: 앞부분\nJev: 네트워크")
+
+
+def test_status_error_mid_stream_starts_new_line(tmp_path):
+    error = _api_error(anthropic.InternalServerError, 500)
+    jev = Jev(RaisingClaude(error, partial="앞부분"), config=Config(model=None, data_dir=tmp_path))
+    cap = Capture()
+    cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
+    assert cap.text == "Jev: 앞부분\nJev: Claude API 오류가 났어요 (500).\n"
+
+
+def test_unexpected_errors_are_not_swallowed(tmp_path):
+    jev = Jev(RaisingClaude(ZeroDivisionError()), config=Config(model=None, data_dir=tmp_path))
+    with pytest.raises(ZeroDivisionError):
+        cli.respond(jev, "안녕", stream=True, debug=False, out=print, write=print)

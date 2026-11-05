@@ -37,4 +37,4 @@ jobs:
       - name: mypy
         run: python -m mypy
       - name: pytest
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=jev --cov-report=term-missing
