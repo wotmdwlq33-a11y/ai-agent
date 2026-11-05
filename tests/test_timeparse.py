@@ -248,3 +248,23 @@ def test_pm_zero_is_noon():
     assert parse_korean_time("내일 오후 0시 30분", NOW) == at(11, 6, 12, 30)
     assert parse_korean_time("오늘 밤 0시", NOW) == at(11, 6, 0)
     assert parse_korean_time("오전 0시 30분", NOW) == at(11, 6, 0, 30)
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("정오", (2026, 11, 5, 12, 0)),
+        ("내일 정오", (2026, 11, 6, 12, 0)),
+        ("12월 25일 정오", (2026, 12, 25, 12, 0)),
+        ("자정", (2026, 11, 6, 0, 0)),
+        ("오늘 자정", (2026, 11, 6, 0, 0)),
+        ("내일 자정", (2026, 11, 7, 0, 0)),
+    ],
+)
+def test_noon_and_midnight_words(text, expected):
+    assert parse_korean_time(text, NOW) == datetime(*expected, tzinfo=TIMEZONE)
+
+
+def test_noon_already_passed_means_tomorrow():
+    after_noon = at(11, 5, 13)
+    assert parse_korean_time("정오", after_noon) == at(11, 6, 12)

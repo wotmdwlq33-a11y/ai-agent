@@ -10,7 +10,8 @@
 * 시각: "9시", "9시 반", "7시 30분", "14:30", 앞에 오전/오후 등의 때를 붙일 수 있음
 
 날짜 단어만 있고 시각이 없으면("내일", "다음 주 월요일") 인식하지 않는다.
-"정오", "자정", "아침에"처럼 숫자 시각이 없는 표현도 인식하지 않는다.
+"아침에", "저녁에"처럼 숫자 시각이 없는 때 표현도 인식하지 않는다.
+"정오"(낮 12시)와 "자정"(밤 12시, 즉 다음 날 0시)은 인식한다.
 
 시각 해석 규칙
 --------------
@@ -57,6 +58,7 @@ _CLOCK = (
     r"(?<!\d)(?P<hour>\d{1,2})\s*시(?!\s*간)"
     r"(?:\s*(?P<half>반)(?=$|\s|에|까지|부터|[,.!?？])|\s*(?P<minute>\d{1,2})\s*분)?"
     r"|(?<!\d)(?P<hh>\d{1,2}):(?P<mm>\d{2})(?!\d)"
+    r"|(?P<named>정오|자정)"
 )
 _ABS_RE = re.compile(rf"(?:(?:{_DAY})\s*)?(?:{_PERIOD}\s*)?(?:{_CLOCK})")
 _REL_RE = re.compile(
@@ -162,7 +164,13 @@ def _explicit_day(m: re.Match[str], today: date) -> tuple[date, str | None] | No
 
 
 def _resolve_absolute(m: re.Match[str], now: datetime) -> datetime | None:
-    if m.group("hour") is not None:
+    named = m.group("named")
+    period = m.group("period")
+    if named:
+        # 정오 = 낮 12시, 자정 = "밤 12시"와 같이 그 날이 끝나는 0시(다음 날 0시)
+        hour, minute = 12, 0
+        period = "밤" if named == "자정" else None
+    elif m.group("hour") is not None:
         hour = int(m.group("hour"))
         minute = 30 if m.group("half") else int(m.group("minute") or 0)
     else:
@@ -171,7 +179,6 @@ def _resolve_absolute(m: re.Match[str], now: datetime) -> datetime | None:
         return None
 
     today = now.date()
-    period = m.group("period")
     try:
         day = _explicit_day(m, today)
     except ValueError:

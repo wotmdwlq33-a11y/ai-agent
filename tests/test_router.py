@@ -206,3 +206,8 @@ def test_month_day_question_is_local_date():
 
 def test_debugging_is_high_effort():
     assert route("메모리 누수 디버깅 도와줘").effort == "high"
+
+
+def test_noon_reminder_routes_locally():
+    r = route("내일 정오에 점심 약속 알려줘")
+    assert (r.target, r.skill) == ("local", "remind_add")
