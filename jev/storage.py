@@ -8,15 +8,11 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-
-try:  # POSIX
-    import fcntl
-except ImportError:  # pragma: no cover - Windows
-    fcntl = None  # type: ignore[assignment]
 
 __all__ = [
     "StorageError",
@@ -103,7 +99,7 @@ def file_lock(path: Path) -> Iterator[None]:
 
     `<파일 이름>.lock` 파일에 배타적 잠금(fcntl.flock)을 건다. 예를 들어 REPL의 알림 스레드와
     따로 실행한 `jev 메모: …`가 동시에 파일을 고쳐 한쪽 변경이 사라지는 것을 막는다.
-    fcntl이 없는 환경(Windows)에서는 잠그지 않는다.
+    Windows에서는 msvcrt.locking으로 잠근다 (10초 동안 못 잡으면 StorageError).
     """
     lock_path = path.with_name(path.name + ".lock")
     try:
@@ -113,11 +109,37 @@ def file_lock(path: Path) -> Iterator[None]:
     except OSError as e:
         raise StorageError(f"잠금 파일({lock_path})을 만들 수 없어요: {e}") from e
     try:
-        if fcntl is not None:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        yield
-    finally:
-        if fcntl is not None:
+        try:
+            _lock(handle.fileno())
+        except OSError as e:
+            raise StorageError(
+                f"파일({path})이 다른 Jev에서 사용 중이에요. 잠시 후 다시 시도해 주세요."
+            ) from e
+        try:
+            yield
+        finally:
             with contextlib.suppress(OSError):
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                _unlock(handle.fileno())
+    finally:
         handle.close()
+
+
+if sys.platform == "win32":  # pragma: no cover - CI는 리눅스에서만 돈다
+    import msvcrt
+
+    def _lock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # 최대 10초 재시도
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _lock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
