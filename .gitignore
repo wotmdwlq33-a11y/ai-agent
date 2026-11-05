@@ -5,3 +5,9 @@ venv/
 .env
 .pytest_cache/
 *.egg-info/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+.coverage
+*.lock

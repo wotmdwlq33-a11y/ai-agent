@@ -1,12 +1,16 @@
 [project]
 name = "jev"
-version = "0.1.0"
+version = "0.2.0"
 description = "Jev: 개인 비서. 간단한 요청은 직접 처리하고, 나머지는 Claude로 라우팅"
-requires-python = ">=3.10"
-dependencies = ["anthropic>=1.12"]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=1.12",
+    # Windows에는 시간대 DB가 없어 zoneinfo가 Asia/Seoul을 찾으려면 필요하다
+    "tzdata; sys_platform == 'win32'",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.10"]
 
 [project.scripts]
 jev = "jev.cli:main"
@@ -15,5 +19,29 @@ jev = "jev.cli:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
+[tool.setuptools.packages.find]
+include = ["jev*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# 한국어 문자열/주석의 전각 문자(？ 등)는 의도한 것이다.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.11"
 packages = ["jev"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
