@@ -70,7 +70,9 @@ def test_ask_stream_forwards_chunks_and_returns_final():
 
 
 def test_ask_stream_refusal_mid_stream():
-    fake = FakeAnthropic(make_response([text_block("부분")], stop_reason="refusal"), chunks=["부분"])
+    fake = FakeAnthropic(
+        make_response([text_block("부분")], stop_reason="refusal"), chunks=["부분"]
+    )
     seen = []
     reply = ClaudeClient(fake, model="m").ask_stream(MESSAGES, effort="low", on_text=seen.append)
     assert seen == ["부분"]

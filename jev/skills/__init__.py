@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-__all__ = ["StorageError", "load_records", "save_records"]
+__all__ = ["StorageError", "has_final_consonant", "josa", "load_records", "save_records"]
 
 
 class StorageError(RuntimeError):
@@ -68,3 +68,16 @@ def save_records(path: Path, records: list[dict[str, Any]]) -> None:
         if isinstance(e, OSError):
             raise StorageError(f"저장 파일({path})을 쓸 수 없어요: {e}") from e
         raise
+
+
+def has_final_consonant(word: str) -> bool:
+    """마지막 한글 글자에 받침이 있는지. 괄호·숫자 등 한글이 아닌 끝 글자는 건너뛴다."""
+    for ch in reversed(word):
+        if "가" <= ch <= "힣":
+            return (ord(ch) - ord("가")) % 28 != 0
+    return False
+
+
+def josa(word: str, with_final: str, without_final: str) -> str:
+    """word 뒤에 받침에 맞는 조사를 붙인다. 예: josa("성탄절", "이에요", "예요")."""
+    return word + (with_final if has_final_consonant(word) else without_final)

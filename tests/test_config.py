@@ -63,7 +63,7 @@ def test_parse_dotenv():
     text = """
 # 주석
 export JEV_MODEL=abc
-JEV_HOME = "~/my jev"   
+JEV_HOME = "~/my jev"
 QUOTED='a # not comment'
 INLINE=value # comment
 NEWLINE="a\\nb"

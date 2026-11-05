@@ -44,7 +44,9 @@ class FakeAnthropic:
         self.chunks = chunks if chunks is not None else []
         self.create_calls: list[dict[str, Any]] = []
         self.stream_calls: list[dict[str, Any]] = []
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._create, stream=self._stream))
+        self.beta = SimpleNamespace(
+            messages=SimpleNamespace(create=self._create, stream=self._stream)
+        )
 
     def _create(self, **kwargs: Any) -> SimpleNamespace:
         self.create_calls.append(kwargs)

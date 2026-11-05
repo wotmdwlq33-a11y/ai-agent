@@ -43,7 +43,9 @@ def test_respond_without_stream(jev):
 
 
 def test_respond_streamed_refusal_warns(tmp_path):
-    jev = Jev(FakeClaude(refused=True, chunks=["부분"]), config=Config(model=None, data_dir=tmp_path))
+    jev = Jev(
+        FakeClaude(refused=True, chunks=["부분"]), config=Config(model=None, data_dir=tmp_path)
+    )
     cap = Capture()
     cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
     assert "중단" in cap.text

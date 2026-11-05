@@ -67,7 +67,11 @@ def test_trim_by_bytes():
 
 
 def test_trim_keeps_latest_turn_even_if_too_big():
-    msgs = turn(0) + [{"role": "user", "content": "큰" * 10_000}, {"role": "assistant", "content": "x"}]
+    msgs = [
+        *turn(0),
+        {"role": "user", "content": "큰" * 10000},
+        {"role": "assistant", "content": "x"},
+    ]
     result, _ = trim_history(msgs, max_messages=100, max_bytes=1000)
     assert [m["role"] for m in result] == ["user", "assistant"]
     assert result[0]["content"] == "큰" * 10_000
