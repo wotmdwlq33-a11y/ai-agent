@@ -23,6 +23,8 @@ from typing import Any
 from jev.storage import StorageError, write_json_atomic
 
 FORMAT_VERSION = 1
+# 내용이 없는 응답을 기록에 남길 때 쓰는 문구 (API는 빈 텍스트를 거부한다)
+EMPTY_REPLY = "(빈 응답)"
 _THINKING_TYPES = {"thinking", "redacted_thinking"}
 
 Message = dict[str, Any]
@@ -51,15 +53,42 @@ def _block_type(block: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _is_empty_text(block: Any) -> bool:
+    if _block_type(block) != "text":
+        return False
+    text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
+    return not (isinstance(text, str) and text.strip())
+
+
+def has_visible_content(content: Any) -> bool:
+    """API에 다시 보낼 수 있는 내용(비어 있지 않은 텍스트 등)이 있는지.
+
+    API는 빈 content와 빈 텍스트 블록을 거부한다. thinking 블록만 있는 응답도
+    thinking을 빼고 나면 비게 되므로 내용이 없는 것으로 본다.
+    """
+    if isinstance(content, str):
+        return bool(content.strip())
+    if not isinstance(content, list):
+        return False
+    return any(_block_type(b) not in _THINKING_TYPES and not _is_empty_text(b) for b in content)
+
+
 def strip_thinking(messages: Iterable[Message]) -> list[Message]:
-    """assistant 메시지에서 thinking 블록을 뺀다. 내용이 비면 그 메시지는 빈 텍스트로 남긴다."""
+    """assistant 메시지에서 thinking 블록과 빈 텍스트 블록을 뺀다.
+
+    남는 내용이 없으면 API가 받아들이도록 자리표시 텍스트(EMPTY_REPLY)를 넣는다.
+    """
     result: list[Message] = []
     for message in messages:
         content = message.get("content")
         if message.get("role") == "assistant" and isinstance(content, list):
-            kept = [b for b in content if _block_type(b) not in _THINKING_TYPES]
+            kept = [
+                b
+                for b in content
+                if _block_type(b) not in _THINKING_TYPES and not _is_empty_text(b)
+            ]
             if not kept:
-                kept = [{"type": "text", "text": ""}]
+                kept = [{"type": "text", "text": EMPTY_REPLY}]
             message = {**message, "content": kept}
         result.append(message)
     return result
@@ -117,6 +146,9 @@ class ConversationStore:
         """저장된 기록을 불러온다. 파일이 없으면 빈 기록, 깨졌으면 백업 후 빈 기록."""
         try:
             raw = self.path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            self._backup_corrupt()
+            return []
         except FileNotFoundError:
             return []
         except OSError as e:

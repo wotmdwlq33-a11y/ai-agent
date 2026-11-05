@@ -181,3 +181,39 @@ def test_unexpected_errors_are_not_swallowed(tmp_path):
     jev = Jev(RaisingClaude(ZeroDivisionError()), config=Config(model=None, data_dir=tmp_path))
     with pytest.raises(ZeroDivisionError):
         cli.respond(jev, "안녕", stream=True, debug=False, out=print, write=print)
+
+
+def test_stream_error_event_shows_error_type(tmp_path):
+    import httpx2
+
+    request = httpx2.Request("POST", "https://api.example.invalid/v1/messages")
+    error = anthropic.APIStatusError(
+        "overloaded",
+        response=httpx2.Response(200, request=request),
+        body={"type": "error", "error": {"type": "overloaded_error", "message": "x"}},
+    )
+    jev = Jev(RaisingClaude(error), config=Config(model=None, data_dir=tmp_path))
+    cap = Capture()
+    cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
+    assert "overloaded_error" in cap.text
+    assert "(200)" not in cap.text
+
+
+def test_one_shot_exit_codes(capsys):
+    assert cli.main(["--no-memory", "여행지", "추천해줘"]) == 2  # JEV_MODEL 없음
+    assert cli.main(["--no-memory", ""]) == 2
+    assert "비어 있어요" in capsys.readouterr().err
+
+
+def test_one_shot_runtime_error_exit_code(tmp_path):
+    jev = Jev(
+        RaisingClaude(_api_error(anthropic.RateLimitError, 429)),
+        config=Config(model=None, data_dir=tmp_path),
+    )
+    code = cli.respond(jev, "안녕", stream=True, debug=False, out=print, write=print)
+    assert code == 1
+
+
+def test_flags_can_be_mixed_with_message(capsys):
+    assert cli.main(["메모", "--no-memory", "목록"]) == 0
+    assert "메모" in capsys.readouterr().out

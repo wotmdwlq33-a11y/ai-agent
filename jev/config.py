@@ -115,8 +115,8 @@ def parse_dotenv(text: str, source: str = ".env") -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith("export "):
-            line = line[len("export ") :].lstrip()
+        if re.match(r"export\s", line):
+            line = line[len("export") :].lstrip()
         key, sep, value = line.partition("=")
         key = key.strip()
         if not sep or not _KEY.match(key):
@@ -125,23 +125,44 @@ def parse_dotenv(text: str, source: str = ".env") -> dict[str, str]:
             )
         value = value.strip()
         if value[:1] in {'"', "'"}:
-            quote = value[0]
-            end = value.find(quote, 1)
-            if end == -1:
-                raise ConfigError(f"{source} {lineno}번째 줄: 따옴표({quote})가 닫히지 않았어요.")
-            inner = value[1:end]
-            value = inner.replace("\\n", "\n") if quote == '"' else inner
+            value = _parse_quoted(value, source, lineno)
+        elif value.startswith("#"):
+            value = ""  # KEY=  # 주석
         else:
             value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
         result[key] = value
     return result
 
 
+def _parse_quoted(value: str, source: str, lineno: int) -> str:
+    """따옴표 값을 해석한다. 큰따옴표 안에서는 \\" \\\\ \\n 이스케이프를 지원한다."""
+    quote = value[0]
+    chars: list[str] = []
+    i = 1
+    while i < len(value):
+        ch = value[i]
+        if quote == '"' and ch == "\\" and i + 1 < len(value):
+            nxt = value[i + 1]
+            chars.append({"n": "\n", '"': '"', "\\": "\\"}.get(nxt, "\\" + nxt))
+            i += 2
+            continue
+        if ch == quote:
+            rest = value[i + 1 :].strip()
+            if rest and not rest.startswith("#"):
+                raise ConfigError(
+                    f"{source} {lineno}번째 줄: 닫는 따옴표 뒤에 다른 글자가 있어요 ({rest!r})."
+                )
+            return "".join(chars)
+        chars.append(ch)
+        i += 1
+    raise ConfigError(f"{source} {lineno}번째 줄: 따옴표({quote})가 닫히지 않았어요.")
+
+
 def load_dotenv(path: Path, environ: MutableMapping[str, str] | None = None) -> dict[str, str]:
     """`.env` 파일 값을 environ(기본 os.environ)에 넣는다. 이미 있는 키는 건드리지 않는다."""
     environ = os.environ if environ is None else environ
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8-sig")  # BOM이 있어도 읽는다
     except OSError as e:
         raise ConfigError(f".env 파일을 읽을 수 없어요: {path} ({e.strerror})") from e
     except UnicodeDecodeError as e:

@@ -1,7 +1,16 @@
 import json
 from types import SimpleNamespace
 
-from jev.memory import ConversationStore, strip_thinking, to_jsonable, trim_history
+import pytest
+
+from jev.memory import (
+    EMPTY_REPLY,
+    ConversationStore,
+    has_visible_content,
+    strip_thinking,
+    to_jsonable,
+    trim_history,
+)
 
 
 def turn(i, thinking=False):
@@ -35,7 +44,8 @@ def test_strip_thinking_keeps_text_and_user_messages():
     stripped = strip_thinking(msgs)
     assert stripped[0] == msgs[0]
     assert stripped[1]["content"] == [{"type": "text", "text": "답0"}]
-    assert stripped[2]["content"] == [{"type": "text", "text": ""}]
+    # API는 빈 텍스트를 거부하므로 자리표시 문구를 넣는다
+    assert stripped[2]["content"] == [{"type": "text", "text": EMPTY_REPLY}]
     # 원본은 그대로
     assert msgs[1]["content"][0]["type"] == "thinking"
 
@@ -119,3 +129,26 @@ def test_clear(tmp_path):
     store.clear()
     store.clear()  # 두 번 지워도 오류 없음
     assert store.load() == []
+
+
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        ("안녕", True),
+        ("  ", False),
+        ([], False),
+        ([{"type": "text", "text": ""}], False),
+        ([{"type": "thinking", "thinking": "", "signature": "s"}], False),
+        ([{"type": "thinking", "thinking": ""}, {"type": "text", "text": "답"}], True),
+        ([SimpleNamespace(type="text", text="답")], True),
+    ],
+)
+def test_has_visible_content(content, expected):
+    assert has_visible_content(content) is expected
+
+
+def test_non_utf8_history_is_backed_up(tmp_path):
+    path = tmp_path / "history.json"
+    path.write_bytes(b"\xff\xfe\x00broken")
+    assert ConversationStore(path).load() == []
+    assert (tmp_path / "history.corrupt.json").exists()

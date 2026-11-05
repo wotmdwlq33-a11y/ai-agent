@@ -4,8 +4,9 @@ import pytest
 
 from jev import local_skills
 from jev.assistant import Jev
+from jev.claude_client import ClaudeReply
 from jev.config import Config, ConfigError
-from jev.memory import ConversationStore, HistoryError
+from jev.memory import EMPTY_REPLY, ConversationStore, HistoryError
 from tests.fakes import AskOnlyClaude, FakeClaude
 
 
@@ -133,3 +134,27 @@ def test_history_save_failure_keeps_answer(cfg):
     assert answer.text == "응답"
     assert answer.warning and "저장할 수 없어요" in answer.warning
     assert len(jev.history) == 2
+
+
+class ThinkingOnlyClaude(FakeClaude):
+    def ask(self, messages, effort):
+        self.calls.append((list(messages), effort))
+        content = [{"type": "thinking", "thinking": "", "signature": "s"}]
+        return ClaudeReply("\n\n(답변이 길어서 중간에 잘렸어요.)", content)
+
+
+def test_thinking_only_reply_is_stored_with_visible_text(cfg):
+    jev = Jev(ThinkingOnlyClaude(), config=cfg)
+    jev.handle("안녕")
+    stored = jev.history[1]["content"]
+    assert stored == [{"type": "text", "text": "(답변이 길어서 중간에 잘렸어요.)"}]
+
+
+def test_empty_reply_gets_placeholder(cfg):
+    class EmptyClaude(FakeClaude):
+        def ask(self, messages, effort):
+            return ClaudeReply("", [])
+
+    jev = Jev(EmptyClaude(), config=cfg)
+    jev.handle("안녕")
+    assert jev.history[1]["content"] == [{"type": "text", "text": EMPTY_REPLY}]

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,7 +66,8 @@ class ClaudeClient:
         }
 
     def ask(self, messages: list[dict[str, Any]], effort: str) -> ClaudeReply:
-        response = self._client.beta.messages.create(**self._request(messages, effort))
+        with _explain_missing_credentials():
+            response = self._client.beta.messages.create(**self._request(messages, effort))
         return _to_reply(response)
 
     def ask_stream(
@@ -75,11 +77,31 @@ class ClaudeClient:
 
         거절(refusal)되면 이미 넘긴 부분 텍스트는 버려야 한다. 반환값의 refused로 알 수 있다.
         """
-        with self._client.beta.messages.stream(**self._request(messages, effort)) as stream:
+        with (
+            _explain_missing_credentials(),
+            self._client.beta.messages.stream(**self._request(messages, effort)) as stream,
+        ):
             for text in stream.text_stream:
                 on_text(text)
             response = stream.get_final_message()
+        if response.stop_reason == "max_tokens":
+            # 일반 호출과 같이 잘림 안내를 붙인다 (스트리밍에서는 직접 출력해야 보인다)
+            on_text(TRUNCATED_NOTE)
         return _to_reply(response)
+
+
+@contextlib.contextmanager
+def _explain_missing_credentials() -> Iterator[None]:
+    """인증 정보가 없을 때 SDK가 내는 TypeError를 알아보기 쉬운 ConfigError로 바꾼다."""
+    try:
+        yield
+    except TypeError as e:
+        if "authentication" not in str(e).lower():
+            raise
+        raise ConfigError(
+            "Claude 인증 정보를 찾을 수 없어요. ANTHROPIC_API_KEY를 설정하거나 "
+            "`ant auth login`으로 로그인하세요."
+        ) from e
 
 
 def _to_reply(response: Any) -> ClaudeReply:

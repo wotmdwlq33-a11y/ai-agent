@@ -9,7 +9,13 @@ from typing import Any, Protocol, runtime_checkable
 from jev import local_skills
 from jev.claude_client import ClaudeClient, ClaudeReply, TextCallback
 from jev.config import Config
-from jev.memory import ConversationStore, HistoryError, trim_history
+from jev.memory import (
+    EMPTY_REPLY,
+    ConversationStore,
+    HistoryError,
+    has_visible_content,
+    trim_history,
+)
 from jev.router import Route, route
 
 
@@ -88,7 +94,11 @@ class Jev:
 
         warning = None
         if not reply.refused:
-            warning = self._remember([*messages, {"role": "assistant", "content": reply.content}])
+            content: Any = reply.content
+            if not has_visible_content(content):
+                # thinking만 있거나 비어 있는 응답을 그대로 남기면 다음 요청이 거부된다
+                content = [{"type": "text", "text": reply.text.strip() or EMPTY_REPLY}]
+            warning = self._remember([*messages, {"role": "assistant", "content": content}])
         return Answer(
             reply.text, decision, streamed=streamed, refused=reply.refused, warning=warning
         )

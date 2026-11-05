@@ -77,3 +77,38 @@ def test_ask_stream_refusal_mid_stream():
     reply = ClaudeClient(fake, model="m").ask_stream(MESSAGES, effort="low", on_text=seen.append)
     assert seen == ["부분"]
     assert reply.refused
+
+
+def test_ask_stream_shows_truncation_note():
+    fake = FakeAnthropic(make_response([text_block("긴답")], stop_reason="max_tokens"), ["긴답"])
+    seen = []
+    reply = ClaudeClient(fake, model="m").ask_stream(MESSAGES, effort="low", on_text=seen.append)
+    assert seen == ["긴답", TRUNCATED_NOTE]
+    assert reply.text == "긴답" + TRUNCATED_NOTE
+
+
+class NoCredentials(FakeAnthropic):
+    def _create(self, **kwargs):
+        raise TypeError("Could not resolve authentication method. Expected api_key ...")
+
+    def _stream(self, **kwargs):
+        raise TypeError("Could not resolve authentication method. Expected api_key ...")
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+def test_missing_credentials_become_config_error(streaming):
+    client = ClaudeClient(NoCredentials(make_response([])), model="m")
+    with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
+        if streaming:
+            client.ask_stream(MESSAGES, effort="low", on_text=lambda _: None)
+        else:
+            client.ask(MESSAGES, effort="low")
+
+
+def test_other_type_errors_are_not_hidden():
+    class Broken(FakeAnthropic):
+        def _create(self, **kwargs):
+            raise TypeError("something else")
+
+    with pytest.raises(TypeError, match="something else"):
+        ClaudeClient(Broken(make_response([])), model="m").ask(MESSAGES, effort="low")

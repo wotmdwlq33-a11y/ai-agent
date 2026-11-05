@@ -117,3 +117,32 @@ def test_env_file_variable(tmp_path, monkeypatch):
     path.write_text("JEV_MODEL=via-var\n", encoding="utf-8")
     monkeypatch.setenv("JEV_ENV_FILE", str(path))
     assert config.load().model == "via-var"
+
+
+@pytest.mark.parametrize(
+    "line, expected",
+    [
+        ("JEV_MODEL=   # 나중에", ""),
+        ('A="a\\"b"', 'a"b'),
+        ('A="a\\\\b"', "a\\b"),
+        ("A='x' # 주석", "x"),
+        ("export\tA=1", "1"),
+        ("A=b=c", "b=c"),
+    ],
+)
+def test_parse_dotenv_edge_cases(line, expected):
+    (value,) = parse_dotenv(line).values()
+    assert value == expected
+
+
+def test_text_after_closing_quote_is_error():
+    with pytest.raises(ConfigError, match="닫는 따옴표 뒤"):
+        parse_dotenv('A="x"y')
+
+
+def test_dotenv_with_bom_and_crlf(tmp_path):
+    path = tmp_path / ".env"
+    path.write_bytes("﻿JEV_MODEL=bom\r\nJEV_STREAM=off\r\n".encode())
+    environ: dict[str, str] = {}
+    load_dotenv(path, environ)
+    assert environ == {"JEV_MODEL": "bom", "JEV_STREAM": "off"}
