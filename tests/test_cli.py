@@ -217,3 +217,57 @@ def test_one_shot_runtime_error_exit_code(tmp_path):
 def test_flags_can_be_mixed_with_message(capsys):
     assert cli.main(["메모", "--no-memory", "목록"]) == 0
     assert "메모" in capsys.readouterr().out
+
+
+def test_reminder_watcher_emits_due_reminders(tmp_path):
+    import threading
+    from datetime import timedelta
+
+    from jev.korean import now
+    from jev.skills import reminders
+
+    reminders.add(tmp_path, "스트레칭", now() - timedelta(seconds=1))
+    emitted = []
+    watcher = cli.ReminderWatcher(tmp_path, threading.Lock(), emitted.append, interval=0.01)
+    watcher.check_once()
+    watcher.check_once()  # 같은 알림을 두 번 보여 주지 않는다
+    assert len(emitted) == 1
+    assert "스트레칭" in emitted[0]
+    assert emitted[0].endswith(cli.PROMPT)
+
+
+def test_reminder_watcher_thread_stops(tmp_path):
+    import threading
+    from datetime import timedelta
+
+    from jev.korean import now
+    from jev.skills import reminders
+
+    reminders.add(tmp_path, "물", now() - timedelta(seconds=1))
+    seen = threading.Event()
+    watcher = cli.ReminderWatcher(tmp_path, threading.Lock(), lambda _: seen.set(), interval=0.01)
+    watcher.start()
+    assert seen.wait(2)
+    watcher.stop()
+    watcher.join(2)
+    assert not watcher.is_alive()
+
+
+def test_reminder_watcher_waits_for_lock(tmp_path):
+    import threading
+    from datetime import timedelta
+
+    from jev.korean import now
+    from jev.skills import reminders
+
+    reminders.add(tmp_path, "회의", now() - timedelta(seconds=1))
+    lock = threading.Lock()
+    emitted = []
+    watcher = cli.ReminderWatcher(tmp_path, lock, emitted.append, interval=0.01)
+    with lock:  # 답변을 출력하는 중
+        t = threading.Thread(target=watcher.check_once)
+        t.start()
+        t.join(0.1)
+        assert emitted == []
+    t.join(2)
+    assert len(emitted) == 1

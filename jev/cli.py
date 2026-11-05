@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import sys
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -20,6 +21,10 @@ from jev.skills.timeparse import format_korean_datetime
 from jev.storage import StorageError
 
 Output = Callable[[str], None]
+
+PROMPT = "나: "
+# 입력을 기다리는 동안 알림을 확인하는 간격(초)
+REMINDER_POLL_SECONDS = 15.0
 
 
 def _print(text: str) -> None:
@@ -52,6 +57,42 @@ def _due_reminders(data_dir: Path) -> list[str]:
     except StorageError as e:
         return [f"(알림을 확인하지 못했어요: {e})"]
     return [f"⏰ 알림: {r.text} ({format_korean_datetime(r.due, current)})" for r in due]
+
+
+class ReminderWatcher(threading.Thread):
+    """입력을 기다리는 동안에도 시간이 된 알림을 출력하는 백그라운드 스레드.
+
+    lock은 REPL이 요청을 처리하는 동안 잡고 있는 잠금이다. 같은 잠금을 써서
+    알림 파일을 동시에 고치거나, 스트리밍 답변 중간에 알림이 끼어드는 일을 막는다.
+    """
+
+    def __init__(
+        self,
+        data_dir: Path,
+        lock: threading.Lock,
+        emit: Output,
+        interval: float = REMINDER_POLL_SECONDS,
+    ) -> None:
+        super().__init__(name="jev-reminders", daemon=True)
+        self._data_dir = data_dir
+        self._lock = lock
+        self._emit = emit
+        self._interval = interval
+        self._stop_event = threading.Event()
+
+    def run(self) -> None:
+        while not self._stop_event.wait(self._interval):
+            self.check_once()
+
+    def check_once(self) -> None:
+        with self._lock:
+            lines = _due_reminders(self._data_dir)
+            if lines:
+                # 입력 줄 위에 알림을 쓰고 프롬프트를 다시 보여 준다
+                self._emit("\n" + "\n".join(lines) + "\n" + PROMPT)
+
+    def stop(self) -> None:
+        self._stop_event.set()
 
 
 def error_message(error: BaseException) -> str | None:
@@ -147,17 +188,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         return respond(jev, text, stream=stream, debug=args.debug, out=_print, write=_write)
 
     _print('Jev: 안녕하세요! 도움말은 "/help", 종료는 Ctrl+D 입니다.')
-    while True:
-        for line in _due_reminders(cfg.data_dir):
-            _print(line)
-        try:
-            text = input("나: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return 0
-        if not text:
-            continue
-        respond(jev, text, stream=stream, debug=args.debug, out=_print, write=_write)
+    lock = threading.Lock()
+    watcher: ReminderWatcher | None = None
+    if sys.stdin.isatty():
+        watcher = ReminderWatcher(cfg.data_dir, lock, _write)
+        watcher.start()
+    try:
+        while True:
+            with lock:
+                for line in _due_reminders(cfg.data_dir):
+                    _print(line)
+            try:
+                text = input(PROMPT).strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 0
+            if not text:
+                continue
+            with lock:
+                respond(jev, text, stream=stream, debug=args.debug, out=_print, write=_write)
+    finally:
+        if watcher is not None:
+            watcher.stop()
 
 
 if __name__ == "__main__":
