@@ -95,6 +95,8 @@ def respond(jev: Jev, text: str, *, stream: bool, debug: bool, out: Output, writ
             out(f"Jev: (위 답변은 중단되었어요) {answer.text}")
     else:
         out(f"Jev: {answer.text}")
+    if answer.warning:
+        out(f"  (주의: {answer.warning})")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

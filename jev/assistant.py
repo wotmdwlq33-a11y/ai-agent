@@ -9,7 +9,7 @@ from typing import Any, Protocol, runtime_checkable
 from jev import local_skills
 from jev.claude_client import ClaudeClient, ClaudeReply, TextCallback
 from jev.config import Config
-from jev.memory import ConversationStore, trim_history
+from jev.memory import ConversationStore, HistoryError, trim_history
 from jev.router import Route, route
 
 
@@ -32,6 +32,8 @@ class Answer:
     streamed: bool = False
     # 스트리밍 중 거절되어 이미 출력한 부분 답변을 무시해야 할 때 True
     refused: bool = False
+    # 답은 했지만 사용자에게 알려야 할 문제 (예: 대화 기록 저장 실패)
+    warning: str | None = None
 
 
 class Jev:
@@ -84,9 +86,12 @@ class Jev:
         else:
             reply = claude.ask(messages, effort=decision.effort)
 
+        warning = None
         if not reply.refused:
-            self._remember([*messages, {"role": "assistant", "content": reply.content}])
-        return Answer(reply.text, decision, streamed=streamed, refused=reply.refused)
+            warning = self._remember([*messages, {"role": "assistant", "content": reply.content}])
+        return Answer(
+            reply.text, decision, streamed=streamed, refused=reply.refused, warning=warning
+        )
 
     def _get_claude(self) -> ClaudeLike:
         if self._claude is None:
@@ -95,10 +100,18 @@ class Jev:
             )
         return self._claude
 
-    def _remember(self, messages: list[dict[str, Any]]) -> None:
+    def _remember(self, messages: list[dict[str, Any]]) -> str | None:
+        """기록을 갱신·저장한다.
+
+        파일 저장에 실패해도 이번 실행 중 기록은 유지하고, 경고 문구를 돌려준다.
+        """
         messages, _ = trim_history(
             messages, self.config.max_history_messages, self.config.max_history_bytes
         )
-        if self._store:
-            self._store.save(messages)
         self.history = messages
+        if self._store:
+            try:
+                self._store.save(messages)
+            except HistoryError as e:
+                return str(e)
+        return None

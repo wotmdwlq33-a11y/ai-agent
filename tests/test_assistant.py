@@ -5,7 +5,7 @@ import pytest
 from jev import local_skills
 from jev.assistant import Jev
 from jev.config import Config, ConfigError
-from jev.memory import ConversationStore
+from jev.memory import ConversationStore, HistoryError
 from tests.fakes import AskOnlyClaude, FakeClaude
 
 
@@ -120,3 +120,16 @@ def test_missing_model_raises_config_error(cfg):
     jev = Jev(config=cfg)
     with pytest.raises(ConfigError, match="JEV_MODEL"):
         jev.handle("안녕")
+
+
+class BrokenStore(ConversationStore):
+    def save(self, messages):
+        raise HistoryError("대화 기록을 저장할 수 없어요: 디스크 가득 참")
+
+
+def test_history_save_failure_keeps_answer(cfg):
+    jev = Jev(FakeClaude(), config=cfg, store=BrokenStore(cfg.history_path))
+    answer = jev.handle("안녕")
+    assert answer.text == "응답"
+    assert answer.warning and "저장할 수 없어요" in answer.warning
+    assert len(jev.history) == 2
