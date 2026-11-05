@@ -172,6 +172,7 @@ class ConversationStore:
         return messages
 
     def save(self, messages: list[Message]) -> None:
+        """기록을 파일에 저장한다. 실패하면 HistoryError."""
         payload = {"version": FORMAT_VERSION, "messages": to_jsonable(messages)}
         try:
             write_json_atomic(self.path, payload, indent=1)
@@ -179,6 +180,7 @@ class ConversationStore:
             raise HistoryError(f"대화 기록을 저장할 수 없어요: {e}") from e
 
     def clear(self) -> None:
+        """기록 파일을 지운다. 파일이 없어도 오류가 아니다."""
         with contextlib.suppress(FileNotFoundError):
             self.path.unlink()
 

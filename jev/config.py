@@ -54,6 +54,8 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Config:
+    """Jev 실행 설정. Config.from_env() 또는 load()로 만든다."""
+
     model: str | None
     data_dir: Path
     memory_enabled: bool = True
@@ -65,9 +67,11 @@ class Config:
 
     @property
     def history_path(self) -> Path:
+        """대화 기록 파일 경로."""
         return self.data_dir / "history.json"
 
     def require_model(self) -> str:
+        """모델 ID를 돌려준다. 지정되지 않았으면 ConfigError."""
         if not self.model:
             raise ConfigError(
                 f"환경변수 {MODEL_ENV} 에 사용할 Claude 모델 ID를 지정하세요. "

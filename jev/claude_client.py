@@ -32,6 +32,8 @@ TextCallback = Callable[[str], None]
 
 @dataclass
 class ClaudeReply:
+    """Claude 응답 하나. text는 보여 줄 글, content는 기록에 다시 넣을 원본 블록이다."""
+
     text: str
     # 대화 기록에 그대로 다시 넣어야 하는 content 블록 (thinking 블록 포함)
     content: list[Any]
@@ -39,6 +41,8 @@ class ClaudeReply:
 
 
 class ClaudeClient:
+    """Anthropic SDK로 Claude를 호출한다. 모델 ID는 설정(JEV_MODEL)에서 받는다."""
+
     def __init__(
         self,
         client: anthropic.Anthropic | None = None,
@@ -68,6 +72,7 @@ class ClaudeClient:
         }
 
     def ask(self, messages: list[dict[str, Any]], effort: str) -> ClaudeReply:
+        """응답을 한 번에 받는다."""
         with _explain_missing_credentials():
             response = self._client.beta.messages.create(**self._request(messages, effort))
         return _to_reply(response)

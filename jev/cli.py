@@ -37,6 +37,7 @@ def _write(text: str) -> None:
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """명령줄 옵션을 해석한다."""
     parser = argparse.ArgumentParser(prog="jev", description="Jev 개인 비서")
     parser.add_argument("--debug", action="store_true", help="라우팅 결과도 함께 출력")
     parser.add_argument("--no-stream", action="store_true", help="답변을 한 번에 출력")
@@ -81,10 +82,12 @@ class ReminderWatcher(threading.Thread):
         self._stop_event = threading.Event()
 
     def run(self) -> None:
+        """stop()이 불릴 때까지 interval마다 알림을 확인한다."""
         while not self._stop_event.wait(self._interval):
             self.check_once()
 
     def check_once(self) -> None:
+        """시간이 된 알림을 한 번 확인해 출력한다."""
         with self._lock:
             lines = _due_reminders(self._data_dir)
             if lines:
@@ -92,6 +95,7 @@ class ReminderWatcher(threading.Thread):
                 self._emit("\n" + "\n".join(lines) + "\n" + PROMPT)
 
     def stop(self) -> None:
+        """스레드를 멈추도록 알린다."""
         self._stop_event.set()
 
 
@@ -167,6 +171,7 @@ def respond(jev: Jev, text: str, *, stream: bool, debug: bool, out: Output, writ
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """CLI 진입점. 요청 단어가 있으면 한 번만 처리하고, 없으면 REPL을 연다. 종료 코드를 돌려준다."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         cfg = config_mod.load(args.env_file)

@@ -22,11 +22,15 @@ from jev.router import Route, route
 
 
 class ClaudeLike(Protocol):
+    """Jev가 쓰는 Claude 클라이언트의 최소 인터페이스 (테스트에서는 가짜로 바꿔 끼운다)."""
+
     def ask(self, messages: list[dict[str, Any]], effort: str) -> ClaudeReply: ...
 
 
 @runtime_checkable
 class StreamingClaudeLike(ClaudeLike, Protocol):
+    """스트리밍 호출(ask_stream)도 지원하는 Claude 클라이언트."""
+
     def ask_stream(
         self, messages: list[dict[str, Any]], effort: str, on_text: TextCallback
     ) -> ClaudeReply: ...
@@ -34,6 +38,8 @@ class StreamingClaudeLike(ClaudeLike, Protocol):
 
 @dataclass
 class Answer:
+    """Jev.handle()의 결과: 보여 줄 답과 라우팅 정보."""
+
     text: str
     route: Route
     # True면 답변 텍스트가 이미 on_text로 모두 출력되었다.
@@ -45,6 +51,8 @@ class Answer:
 
 
 class Jev:
+    """요청을 라우팅해 로컬 기능 또는 Claude로 처리하고 대화 기록을 관리한다."""
+
     def __init__(
         self,
         claude: ClaudeLike | None = None,
@@ -68,6 +76,7 @@ class Jev:
 
     @property
     def data_dir(self) -> Path:
+        """메모·알림·대화 기록을 저장하는 폴더."""
         return self.config.data_dir
 
     def handle(self, text: str, on_text: TextCallback | None = None) -> Answer:

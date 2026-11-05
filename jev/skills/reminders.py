@@ -25,12 +25,15 @@ class ReminderError(ValueError):
 
 @dataclass(frozen=True)
 class Reminder:
+    """알림 하나. due는 한국 시간대가 붙은 시각."""
+
     text: str
     due: datetime  # tz-aware, Asia/Seoul
     id: int = field(default=0, compare=False)
 
 
 def reminder_path(data_dir: Path) -> Path:
+    """알림 저장 파일 경로."""
     return data_dir / REMINDER_FILE
 
 

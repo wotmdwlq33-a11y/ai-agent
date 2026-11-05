@@ -239,10 +239,12 @@ def holiday_name(d: date) -> str | None:
 
 
 def is_holiday(d: date) -> bool:
+    """d가 공휴일이면 True."""
     return holiday_name(d) is not None
 
 
 def is_weekend_or_holiday(d: date) -> bool:
+    """d가 토·일요일이거나 공휴일이면 True."""
     return d.weekday() >= _SATURDAY or is_holiday(d)
 
 

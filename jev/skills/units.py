@@ -18,6 +18,8 @@ class ConversionError(ValueError):
 
 @dataclass(frozen=True)
 class Unit:
+    """단위 하나: 이름, 종류(길이·무게 등), 기준 단위로의 환산 정보."""
+
     key: str
     dimension: str
     factor: float  # 기준 단위(m, g, m², ml)로 바꾸는 배수. 온도는 쓰지 않는다.
@@ -129,6 +131,8 @@ _TEMP_QUESTION = re.compile(r"(섭씨|화씨)\s*몇\s*도")
 
 @dataclass(frozen=True)
 class ConversionRequest:
+    """ "10km는 몇 마일" 같은 요청을 해석한 결과."""
+
     value: float
     src: str  # UNITS 키
     dst: str

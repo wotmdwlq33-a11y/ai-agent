@@ -23,12 +23,15 @@ class MemoError(ValueError):
 
 @dataclass(frozen=True)
 class Memo:
+    """메모 하나. created_at은 한국 시간 ISO 문자열."""
+
     id: int
     text: str
     created_at: str  # ISO 8601, Asia/Seoul
 
 
 def memo_path(data_dir: Path) -> Path:
+    """메모 저장 파일 경로."""
     return data_dir / MEMO_FILE
 
 

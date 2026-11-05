@@ -21,6 +21,8 @@ Effort = Literal["low", "medium", "high"]
 
 @dataclass(frozen=True)
 class Route:
+    """라우팅 결과: 어디로 보낼지(target)와 그에 필요한 정보."""
+
     target: Target
     # target == "local"일 때 실행할 로컬 기능 이름
     skill: str | None = None
@@ -221,24 +223,23 @@ def _reminder_body(text: str) -> str | None:
 
 
 def route(text: str) -> Route:
+    """요청 문장을 local(로컬 기능) 또는 claude(effort 포함)로 분류한다."""
     for skill, pattern in LOCAL_PATTERNS:
         m = pattern.search(text)
         if m and _accept(skill, m, text):
             return Route(
                 "local",
                 skill=skill,
-                reason=f"로컬 기능 '{skill}'과 일치",
+                reason=f"로컬 기능 일치: {skill}",
                 args=_route_args(skill, m),
             )
 
     body = _reminder_body(text)
     if body is not None:
-        return Route("local", skill="remind_add", reason="로컬 기능 'remind_add'와 일치", args=body)
+        return Route("local", skill="remind_add", reason="로컬 기능 일치: remind_add", args=body)
 
     if units.parse_request(text) is not None:
-        return Route(
-            "local", skill="convert", reason="로컬 기능 'convert'와 일치", args=text.strip()
-        )
+        return Route("local", skill="convert", reason="로컬 기능 일치: convert", args=text.strip())
 
     stripped = text.strip()
     if len(stripped) >= LONG_REQUEST_MIN or HIGH_KEYWORDS.search(stripped):
