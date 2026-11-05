@@ -152,3 +152,11 @@ def test_non_utf8_history_is_backed_up(tmp_path):
     path.write_bytes(b"\xff\xfe\x00broken")
     assert ConversationStore(path).load() == []
     assert (tmp_path / "history.corrupt.json").exists()
+
+
+def test_unserializable_block_is_history_error(tmp_path):
+    from jev.memory import HistoryError
+
+    store = ConversationStore(tmp_path / "h.json")
+    with pytest.raises(HistoryError, match="저장할 수 없어요"):
+        store.save([{"role": "assistant", "content": [object()]}])

@@ -173,7 +173,10 @@ class ConversationStore:
 
     def save(self, messages: list[Message]) -> None:
         """기록을 파일에 저장한다. 실패하면 HistoryError."""
-        payload = {"version": FORMAT_VERSION, "messages": to_jsonable(messages)}
+        try:
+            payload = {"version": FORMAT_VERSION, "messages": to_jsonable(messages)}
+        except TypeError as e:
+            raise HistoryError(f"대화 기록을 저장할 수 없어요: {e}") from e
         try:
             write_json_atomic(self.path, payload, indent=1)
         except StorageError as e:
