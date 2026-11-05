@@ -1,3 +1,3 @@
 from jev.cli import main
 
-main()
+raise SystemExit(main())
