@@ -50,6 +50,10 @@ _ASK = r"(?:이야|야|예요|이에요|인가요|이니|니|이지|지|일까|�
 LOCAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("help", re.compile(r"^\s*(/help|도움말|help|뭐\s*할\s*수\s*있어)" + _END, re.I)),
     ("reset", re.compile(r"^\s*(/reset|초기화|대화\s*초기화)" + _END, re.I)),
+    (
+        "status",
+        re.compile(r"^\s*(/status|/config|설정\s*확인|설정\s*보여\s*줘|상태\s*확인)" + _END, re.I),
+    ),
     ("time", re.compile(r"^\s*(지금\s*|현재\s*)?(몇\s*시(야|예요|에요|니|지)?|시간|시각)" + _END)),
     (
         "date",

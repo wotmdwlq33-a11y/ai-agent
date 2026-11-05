@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -90,6 +91,8 @@ class Jev:
                 if self._store:
                     self._store.clear()
                 return Answer("대화 기록을 지웠어요.", decision)
+            if decision.skill == "status":
+                return Answer(self.status_text(), decision)
             reply_text = local_skills.run(
                 decision.skill, text=text, args=decision.args, data_dir=self.data_dir
             )
@@ -115,6 +118,30 @@ class Jev:
         return Answer(
             reply.text, decision, streamed=streamed, refused=reply.refused, warning=warning
         )
+
+    def status_text(self) -> str:
+        """현재 설정 요약. API 키 값은 절대 보여 주지 않고 설정 여부만 알린다."""
+        cfg = self.config
+        has_key = bool(
+            os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        )
+        on_off = {True: "켜짐", False: "꺼짐"}
+        lines = [
+            "현재 설정이에요:",
+            f"- 모델(JEV_MODEL): {cfg.model or '설정 안 됨 — Claude를 쓰려면 필요해요'}",
+            "- API 키: "
+            + (
+                "환경변수에 있음"
+                if has_key
+                else "환경변수에 없음 (`ant auth login`을 썼다면 괜찮아요)"
+            ),
+            f"- 데이터 폴더(JEV_HOME): {cfg.data_dir}",
+            f"- 대화 기록 저장: {on_off[cfg.memory_enabled]} "
+            f"(지금 {len(self.history)}개 메시지, 최대 {cfg.max_history_messages}개)",
+            f"- 스트리밍 출력: {on_off[cfg.stream]}",
+            f"- 현재 시각 전달: {on_off[cfg.send_time]}",
+        ]
+        return "\n".join(lines)
 
     def _user_content(self, text: str) -> str:
         """Claude에게 보낼 사용자 메시지. 설정에 따라 현재 시각을 앞에 붙인다.

@@ -188,3 +188,22 @@ def test_send_time_can_be_turned_off(cfg):
     claude = FakeClaude()
     Jev(claude, config=cfg).handle("안녕")
     assert claude.calls[0][0][0]["content"] == "안녕"
+
+
+def test_status_never_shows_api_key(cfg, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret-value")
+    claude = FakeClaude()
+    answer = Jev(claude, config=cfg).handle("/status")
+    assert answer.route.skill == "status"
+    assert "sk-secret-value" not in answer.text
+    assert "환경변수에 있음" in answer.text
+    assert "설정 안 됨" in answer.text
+    assert str(cfg.data_dir) in answer.text
+    assert claude.calls == []
+
+
+def test_status_without_key(cfg, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    answer = Jev(FakeClaude(), config=cfg).handle("설정 확인")
+    assert "환경변수에 없음" in answer.text

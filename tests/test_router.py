@@ -16,6 +16,8 @@ from jev.router import route
         ("도움말", "help"),
         ("/reset", "reset"),
         ("초기화", "reset"),
+        ("/status", "status"),
+        ("설정 확인", "status"),
     ],
 )
 def test_local_requests(text, skill):
