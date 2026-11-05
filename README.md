@@ -47,6 +47,7 @@ python -m jev --debug             # 라우팅 결과도 함께 출력
 python -m jev --no-stream         # 답변을 한 번에 출력
 python -m jev --no-memory         # 대화 기록을 파일에 저장하지 않음
 python -m jev --env-file my.env   # 다른 .env 파일 사용
+python -m jev 메모 목록             # 요청 하나만 처리하고 종료 (스크립트용)
 ```
 
 로컬 기능만 쓸 때는 API 키와 `JEV_MODEL` 없이도 동작합니다.

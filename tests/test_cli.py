@@ -95,3 +95,28 @@ def test_ctrl_c_during_stream_stops_only_this_answer(tmp_path):
     cli.respond(jev, "안녕", stream=True, debug=False, out=cap.out, write=cap.write)
     assert cap.text == "Jev: 앞부분\nJev: (답변을 중단했어요)\n"
     assert jev.history == []
+
+
+def test_one_shot_message(capsys):
+    assert cli.main(["--no-memory", "메모:", "우유", "사기"]) == 0
+    out = capsys.readouterr().out
+    assert "메모했어요" in out
+    assert "안녕하세요" not in out
+
+
+def test_due_reminders_are_shown_and_removed(tmp_path):
+    from datetime import timedelta
+
+    from jev.korean import now
+    from jev.skills import reminders
+
+    reminders.add(tmp_path, "물 마시기", now() - timedelta(minutes=1))
+    lines = cli._due_reminders(tmp_path)
+    assert len(lines) == 1 and "물 마시기" in lines[0]
+    assert cli._due_reminders(tmp_path) == []
+
+
+def test_corrupt_reminders_file_does_not_crash(tmp_path):
+    (tmp_path / "reminders.json").write_text("{broken", encoding="utf-8")
+    (line,) = cli._due_reminders(tmp_path)
+    assert "알림을 확인하지 못했어요" in line
