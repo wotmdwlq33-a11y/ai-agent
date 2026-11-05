@@ -21,7 +21,8 @@ flowchart TD
     J <--> M["memory.py<br/>대화 기록 JSON"]
     CFG["config.py<br/>환경변수 · .env"] -.-> CLI
     CFG -.-> J
-    S1 & S2 & M --> D[("데이터 폴더<br/>~/.jev")]
+    S1 & S2 & M --> ST["storage.py<br/>원자적 JSON 저장"]
+    ST --> D[("데이터 폴더<br/>~/.jev")]
 ```
 
 ```
@@ -138,6 +139,8 @@ GitHub Actions(`.github/workflows/ci.yml`)가 Python 3.11 / 3.12 / 3.13에서 �
 | `jev/skills/reminders.py` | 알림 저장과 시간이 된 알림 꺼내기 (`reminders.json`) |
 | `jev/skills/units.py` | 길이·무게·온도·넓이·부피 단위 변환 |
 | `jev/skills/holidays.py` | 대한민국 공휴일 표(2025–2027)와 조회 |
+| `jev/storage.py` | JSON 파일 원자적 저장·읽기 (메모·알림·대화 기록 공용) |
+| `jev/korean.py` | 한국 시간대, 요일, 조사(은/는, 이에요/예요) 도우미 |
 | `jev/claude_client.py` | Claude API 호출(일반·스트리밍), 거절과 길이 초과 처리 |
 | `jev/memory.py` | 대화 기록 저장·불러오기·크기 제한 |
 | `jev/config.py` | 환경변수와 `.env` 설정 읽기, 오류 메시지 |

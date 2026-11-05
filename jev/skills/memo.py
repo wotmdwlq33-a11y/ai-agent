@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
-from jev.skills import StorageError, load_records, save_records
+from jev.korean import TIMEZONE
+from jev.storage import StorageError, load_records, save_records
 
-TIMEZONE = ZoneInfo("Asia/Seoul")
 MEMO_FILE = "memos.json"
 MAX_MEMO_LENGTH = 1000
 MAX_MEMOS = 1000

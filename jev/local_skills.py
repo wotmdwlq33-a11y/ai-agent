@@ -6,13 +6,15 @@ import re
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
+from jev.config import default_data_dir
+from jev.korean import TIMEZONE as TIMEZONE  # 하위 호환: local_skills.TIMEZONE
+from jev.korean import WEEKDAYS, format_date, josa
+from jev.korean import now as now
 from jev.router import route
-from jev.skills import StorageError, josa, memo, reminders, timeparse, units
+from jev.skills import memo, reminders, timeparse, units
+from jev.storage import StorageError
 
-TIMEZONE = ZoneInfo("Asia/Seoul")
-WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 MEMO_LIST_LIMIT = 30
 SEARCH_LIMIT = 30
 
@@ -28,25 +30,18 @@ HELP_TEXT = """\
 - 그 밖의 질문 : Claude에게 넘겨서 답해요. 어려운 질문일수록 더 깊게 생각하게 합니다."""
 
 
-def now() -> datetime:
-    return datetime.now(TIMEZONE)
-
-
-def default_data_dir() -> Path:
-    return Path.home() / ".jev"
-
-
 def run(
     skill: str,
     current: datetime | None = None,
     *,
     text: str = "",
+    args: str | None = None,
     data_dir: Path | None = None,
 ) -> str:
     """로컬 기능을 실행해 답을 돌려준다.
 
-    text에는 사용자의 원문을 넘긴다. 라우터의 Route.args를 넘겨도 동작한다.
-    data_dir이 None이면 ~/.jev 를 쓴다.
+    args에는 라우터가 뽑은 인자(Route.args)를 넘긴다. args 없이 text(사용자 원문)만
+    주면 라우터를 다시 돌려 인자를 뽑는다. data_dir이 None이면 ~/.jev 를 쓴다.
     """
     current = current or now()
     if skill == "time":
@@ -59,8 +54,9 @@ def run(
     handler = _HANDLERS.get(skill)
     if handler is None:
         raise ValueError(f"알 수 없는 로컬 기능: {skill}")
-    decision = route(text)
-    args = decision.args if decision.skill == skill else text.strip()
+    if args is None:
+        decision = route(text)
+        args = decision.args if decision.skill == skill else text.strip()
     try:
         return handler(args, current, data_dir or default_data_dir())
     except StorageError as e:
@@ -171,10 +167,6 @@ def _convert(args: str, current: datetime, data_dir: Path) -> str:
 # ---- 공휴일 / D-day ----
 
 
-def _fmt_date(d: date) -> str:
-    return f"{d.year}년 {d.month}월 {d.day}일({WEEKDAYS[d.weekday()]})"
-
-
 def _holiday_next(args: str, current: datetime, data_dir: Path) -> str:
     from jev.skills import holidays
 
@@ -188,9 +180,9 @@ def _holiday_next(args: str, current: datetime, data_dir: Path) -> str:
         return f"{last}년까지의 공휴일만 알고 있어서, 다음 공휴일은 아직 알려드릴 수 없어요."
     day, name = found
     if day == today:
-        return f"오늘({_fmt_date(day)})이 바로 {josa(name, '이에요', '예요')}!"
+        return f"오늘({format_date(day)})이 바로 {josa(name, '이에요', '예요')}!"
     days = (day - today).days
-    return f"다음 공휴일은 {_fmt_date(day)} {josa(name, '이에요', '예요')}. {days}일 남았어요."
+    return f"다음 공휴일은 {format_date(day)} {josa(name, '이에요', '예요')}. {days}일 남았어요."
 
 
 def _holiday_year(args: str, current: datetime, data_dir: Path) -> str:
@@ -220,10 +212,10 @@ def _holiday_check(args: str, current: datetime, data_dir: Path) -> str:
     except holidays.UnsupportedYearError as e:
         return str(e)
     if name:
-        return f"네, {josa(word, '은', '는')} {josa(name, '이에요', '예요')}. ({_fmt_date(day)})"
+        return f"네, {josa(word, '은', '는')} {josa(name, '이에요', '예요')}. ({format_date(day)})"
     if day.weekday() >= 5:
-        return f"{josa(word, '은', '는')} 공휴일은 아니지만 주말이에요. ({_fmt_date(day)})"
-    return f"아니요, {josa(word, '은', '는')} 공휴일이 아니에요. ({_fmt_date(day)})"
+        return f"{josa(word, '은', '는')} 공휴일은 아니지만 주말이에요. ({format_date(day)})"
+    return f"아니요, {josa(word, '은', '는')} 공휴일이 아니에요. ({format_date(day)})"
 
 
 def _parse_date(text: str, today: date) -> date | None:
@@ -251,10 +243,10 @@ def _dday(args: str, current: datetime, data_dir: Path) -> str:
         )
     days = (target - today).days
     if days == 0:
-        return f"{_fmt_date(target)}은 바로 오늘이에요! (D-Day)"
+        return f"{format_date(target)}은 바로 오늘이에요! (D-Day)"
     if days > 0:
-        return f"{_fmt_date(target)}까지 {days}일 남았어요. (D-{days})"
-    return f"{_fmt_date(target)}은 {-days}일 지났어요. (D+{-days})"
+        return f"{format_date(target)}까지 {days}일 남았어요. (D-{days})"
+    return f"{format_date(target)}은 {-days}일 지났어요. (D+{-days})"
 
 
 _Handler = Callable[[str, datetime, Path], str]

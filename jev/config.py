@@ -41,6 +41,11 @@ _FALSE = {"0", "false", "no", "off", "n", "아니오", "끄기"}
 _KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def default_data_dir() -> Path:
+    """JEV_HOME이 없을 때 쓰는 데이터 폴더 (~/.jev)."""
+    return Path.home() / ".jev"
+
+
 class ConfigError(ValueError):
     """설정값이 잘못되었을 때. 메시지는 사용자에게 그대로 보여 준다."""
 
@@ -72,7 +77,7 @@ class Config:
         """환경변수(기본: os.environ)에서 설정을 만든다. `.env`는 읽지 않는다."""
         env = os.environ if env is None else env
         home = env.get(HOME_ENV, "").strip()
-        data_dir = Path(home).expanduser() if home else Path.home() / ".jev"
+        data_dir = Path(home).expanduser() if home else default_data_dir()
         return cls(
             model=env.get(MODEL_ENV, "").strip() or None,
             data_dir=data_dir,

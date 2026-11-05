@@ -9,7 +9,7 @@ import math
 import re
 from dataclasses import dataclass
 
-from jev.skills import josa
+from jev.korean import josa
 
 
 class ConversionError(ValueError):

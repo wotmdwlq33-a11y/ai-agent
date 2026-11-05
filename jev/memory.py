@@ -16,10 +16,11 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
+
+from jev.storage import StorageError, write_json_atomic
 
 FORMAT_VERSION = 1
 _THINKING_TYPES = {"thinking", "redacted_thinking"}
@@ -27,7 +28,7 @@ _THINKING_TYPES = {"thinking", "redacted_thinking"}
 Message = dict[str, Any]
 
 
-class HistoryError(RuntimeError):
+class HistoryError(StorageError):
     """대화 기록 파일을 읽거나 쓸 수 없을 때."""
 
 
@@ -140,20 +141,10 @@ class ConversationStore:
 
     def save(self, messages: list[Message]) -> None:
         payload = {"version": FORMAT_VERSION, "messages": to_jsonable(messages)}
-        text = json.dumps(payload, ensure_ascii=False, indent=1)
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(prefix=".history-", suffix=".tmp", dir=self.path.parent)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    f.write(text)
-                os.replace(tmp, self.path)
-            except BaseException:
-                with contextlib.suppress(OSError):
-                    os.unlink(tmp)
-                raise
-        except OSError as e:
-            raise HistoryError(f"대화 기록을 저장할 수 없어요: {self.path} ({e.strerror})") from e
+            write_json_atomic(self.path, payload, indent=1)
+        except StorageError as e:
+            raise HistoryError(f"대화 기록을 저장할 수 없어요: {e}") from e
 
     def clear(self) -> None:
         with contextlib.suppress(FileNotFoundError):

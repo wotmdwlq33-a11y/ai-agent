@@ -3,10 +3,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from jev.skills import StorageError, reminders
+from jev.korean import TIMEZONE
+from jev.skills import reminders
 from jev.skills.reminders import Reminder
+from jev.storage import StorageError
 
-NOW = datetime(2026, 11, 5, 10, 0, tzinfo=reminders.TIMEZONE)
+NOW = datetime(2026, 11, 5, 10, 0, tzinfo=TIMEZONE)
 
 
 def test_missing_file(tmp_path):

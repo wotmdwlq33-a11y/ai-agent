@@ -69,7 +69,9 @@ class Jev:
                 if self._store:
                     self._store.clear()
                 return Answer("대화 기록을 지웠어요.", decision)
-            reply_text = local_skills.run(decision.skill, text=text, data_dir=self.data_dir)
+            reply_text = local_skills.run(
+                decision.skill, text=text, args=decision.args, data_dir=self.data_dir
+            )
             return Answer(reply_text, decision)
 
         assert decision.effort is not None

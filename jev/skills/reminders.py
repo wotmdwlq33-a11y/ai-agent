@@ -10,11 +10,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from jev.skills import StorageError, load_records, save_records
+from jev.korean import localize
+from jev.storage import StorageError, load_records, save_records
 
-TIMEZONE = ZoneInfo("Asia/Seoul")
 REMINDER_FILE = "reminders.json"
 MAX_REMINDER_LENGTH = 1000
 MAX_REMINDERS = 1000
@@ -35,10 +34,6 @@ def reminder_path(data_dir: Path) -> Path:
     return data_dir / REMINDER_FILE
 
 
-def _aware(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=TIMEZONE) if dt.tzinfo is None else dt.astimezone(TIMEZONE)
-
-
 def _load(data_dir: Path) -> list[Reminder]:
     path = reminder_path(data_dir)
     result: list[Reminder] = []
@@ -47,7 +42,7 @@ def _load(data_dir: Path) -> list[Reminder]:
         try:
             if not isinstance(rid, int) or not isinstance(text, str) or not isinstance(due, str):
                 raise ValueError
-            result.append(Reminder(text, _aware(datetime.fromisoformat(due)), rid))
+            result.append(Reminder(text, localize(datetime.fromisoformat(due)), rid))
         except ValueError as e:
             raise StorageError(
                 f"저장 파일({path})에 잘못된 알림이 있어요. "
@@ -73,14 +68,14 @@ def add(data_dir: Path, text: str, due: datetime) -> Reminder:
     items = _load(data_dir)
     if len(items) >= MAX_REMINDERS:
         raise ReminderError(f"알림은 최대 {MAX_REMINDERS}개까지 저장할 수 있어요.")
-    reminder = Reminder(text, _aware(due), max((r.id for r in items), default=0) + 1)
+    reminder = Reminder(text, localize(due), max((r.id for r in items), default=0) + 1)
     _save(data_dir, [*items, reminder])
     return reminder
 
 
 def list_pending(data_dir: Path, now: datetime) -> list[Reminder]:
     """아직 시간이 안 된 알림을 시간순으로."""
-    now = _aware(now)
+    now = localize(now)
     return sorted((r for r in _load(data_dir) if r.due > now), key=lambda r: r.due)
 
 
@@ -89,7 +84,7 @@ def pop_due(data_dir: Path, now: datetime) -> list[Reminder]:
 
     파일이 없으면 빈 목록. 파일이 깨졌으면 StorageError (파일은 건드리지 않음).
     """
-    now = _aware(now)
+    now = localize(now)
     items = _load(data_dir)
     due = sorted((r for r in items if r.due <= now), key=lambda r: r.due)
     if due:

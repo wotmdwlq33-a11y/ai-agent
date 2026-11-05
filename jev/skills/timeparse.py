@@ -36,10 +36,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
 
-TIMEZONE = ZoneInfo("Asia/Seoul")
-WEEKDAYS = "월화수목금토일"
+from jev.korean import TIMEZONE, WEEKDAYS, localize
 
 _AM = {"새벽", "아침", "오전"}
 _PM = {"오후", "낮", "점심", "저녁"}
@@ -74,12 +72,6 @@ class TimeMatch:
     when: datetime
     start: int
     end: int
-
-
-def _localize(now: datetime) -> datetime:
-    if now.tzinfo is None:
-        return now.replace(tzinfo=TIMEZONE)
-    return now.astimezone(TIMEZONE)
 
 
 def _at(d: date, hour: int, minute: int) -> datetime:
@@ -205,7 +197,7 @@ def find_korean_time(text: str, now: datetime) -> TimeMatch | None:
 
     같은 위치에서 여러 해석이 가능하면 더 긴 표현을 쓴다 ("3일 뒤 9시" > "3일 뒤").
     """
-    now = _localize(now)
+    now = localize(now)
     found: list[TimeMatch] = []
     for regex, resolve in ((_ABS_RE, _resolve_absolute), (_REL_RE, _resolve_relative)):
         for m in regex.finditer(text):
@@ -240,7 +232,7 @@ def leading_time(text: str) -> tuple[int, bool] | None:
 
 def format_korean_datetime(when: datetime, now: datetime) -> str:
     """예: "오늘 오후 3시 10분", "내일 오전 9시", "11월 9일(월) 오전 10시"."""
-    when, now = _localize(when), _localize(now)
+    when, now = localize(when), localize(now)
     days = (when.date() - now.date()).days
     named = {-1: "어제", 0: "오늘", 1: "내일", 2: "모레"}
     if days in named:

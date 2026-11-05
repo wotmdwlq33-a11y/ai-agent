@@ -2,7 +2,8 @@ from datetime import datetime
 
 import pytest
 
-from jev.skills import StorageError, memo
+from jev.skills import memo
+from jev.storage import StorageError
 
 NOW = datetime(2026, 11, 5, 10, 0, tzinfo=memo.TIMEZONE)
 
