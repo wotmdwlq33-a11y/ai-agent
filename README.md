@@ -10,18 +10,21 @@ Jev는 요청을 받아 **간단한 것은 직접 처리**하고, 나머지는 *
 flowchart TD
     U[사용자 입력] --> CLI["cli.py<br/>REPL · 스트리밍 출력 · 알림 스레드"]
     CLI --> J["assistant.py<br/>Jev.handle()"]
-    J --> R{"router.py<br/>route()"}
-    R -- "local (문장 전체 일치)" --> L["local_skills.py"]
+    J -- "1. 분류" --> R{"router.py<br/>route()"}
+    J -- "2a. local (문장 전체 일치)" --> L["local_skills.py"]
     L --> S1["skills/memo.py<br/>메모"]
-    L --> S2["skills/timeparse.py · reminders.py<br/>시간 해석 · 알림"]
+    L --> S2["skills/timeparse.py<br/>시간 해석"]
+    L --> S5["skills/reminders.py<br/>알림"]
     L --> S3["skills/units.py<br/>단위 변환"]
     L --> S4["skills/holidays.py<br/>공휴일 · 날짜"]
-    R -- "claude (effort: low/medium/high)" --> C["claude_client.py<br/>ask / ask_stream"]
+    CLI -- "알림 확인 스레드" --> S5
+    J -- "2b. claude (effort: low/medium/high)" --> C["claude_client.py<br/>ask / ask_stream"]
     C --> API[(Claude API)]
     J <--> M["memory.py<br/>대화 기록 JSON"]
     CFG["config.py<br/>환경변수 · .env"] -.-> CLI
     CFG -.-> J
-    S1 & S2 & M --> ST["storage.py<br/>원자적 JSON 저장"]
+    K["korean.py<br/>시간대 · 요일 · 조사"] -.-> L
+    S1 & S5 & M --> ST["storage.py<br/>원자적 저장 · 파일 잠금"]
     ST --> D[("데이터 폴더<br/>~/.jev")]
 ```
 
@@ -61,7 +64,7 @@ python -m jev 메모 목록             # 요청 하나만 처리하고 종료 (
 | 시간·날짜 | `몇 시야?`, `오늘 날짜`, `무슨 요일이야?` | 한국 시간 기준 |
 | 메모 추가 | `메모: 우유 사기`, `메모해줘 우유 사기`, `우유 사기 메모해줘` | 최대 1000자, 1000개 |
 | 메모 보기·검색·삭제 | `메모 목록`, `메모 검색 우유`, `메모 삭제 3` | 최근 30개까지 표시 |
-| 알림 추가 | `10분 뒤에 회의 알려줘`, `내일 9시에 병원 가기 알려줘`, `다음 주 월요일 10시에 보고 알려줘` | 시간이 되면 ⏰로 표시 (입력을 기다리는 중에도 15초 간격으로 확인) |
+| 알림 추가 | `10분 뒤에 회의 알려줘`, `내일 9시에 병원 가기 알려줘`, `다음 주 월요일 10시에 보고 알려줘` | 시간이 되면 ⏰로 표시 (터미널에서 입력을 기다리는 중에도 15초 간격으로 확인) |
 | 알림 목록 | `알림 목록`, `리마인더 목록` | |
 | 단위 변환 | `10km는 몇 마일`, `100 화씨를 섭씨로`, `30평은 몇 제곱미터`, `5 lb to kg` | 길이·무게·온도·넓이·부피 |
 | 공휴일 | `다음 공휴일`, `올해 공휴일`, `2027년 공휴일`, `오늘 공휴일이야?` | 2025–2027년 |
@@ -70,7 +73,8 @@ python -m jev 메모 목록             # 요청 하나만 처리하고 종료 (
 | 설정 확인 | `/status`, `설정 확인` | 모델·API 키 설정 여부(키 값은 표시 안 함), 데이터 폴더 등 |
 
 시간 해석 규칙 (`jev/skills/timeparse.py`)
-- "오전/아침"은 오전, "오후/저녁/밤"은 오후로 봅니다. "밤 12시"는 다음 날 0시입니다.
+- 새벽·아침·오전은 오전, 낮·점심·오후·저녁은 오후로 봅니다. 밤 6–11시는 저녁 시각, 밤 1–5시는 다음 날 새벽,
+  "밤 12시"는 다음 날 0시입니다.
 - 날짜 없이 "9시"처럼 시각만 말하면, 오늘 오전 → 오늘 오후 → 내일 오전 중 아직 지나지 않은 가장 가까운 시각으로 정합니다.
 - "내일 3시"처럼 다른 날 + 시각만 말하면 1–6시는 오후, 7–11시는 오전으로 봅니다.
 - "10분 뒤"처럼 초를 말하지 않은 상대 시간은 분 단위로 올림합니다.
@@ -111,6 +115,8 @@ python -m jev 메모 목록             # 요청 하나만 처리하고 종료 (
 | `history.json` | Claude와의 대화 기록 (`/reset` 또는 "초기화"로 삭제) |
 | `memos.json` | 메모 |
 | `reminders.json` | 알림 |
+| `memos.json.lock`, `reminders.json.lock` | 동시 쓰기 방지용 잠금 파일 (지워도 됨) |
+| `history.corrupt.json` | 깨진 대화 기록을 옮겨 둔 백업 (있을 때만) |
 
 파일은 임시 파일에 쓴 뒤 교체하는 방식으로 저장해서, 저장 도중 끊겨도 깨지지 않습니다.
 메모·알림 파일을 고칠 때는 `*.lock` 파일로 잠가서, 여러 Jev 프로세스가 동시에 써도 내용이 사라지지 않습니다
@@ -124,7 +130,7 @@ python -m jev 메모 목록             # 요청 하나만 처리하고 종료 (
 | `환경변수 JEV_MODEL 에 사용할 Claude 모델 ID를 지정하세요` | `export JEV_MODEL=<모델 ID>` 또는 `.env`에 `JEV_MODEL=<모델 ID>`를 넣으세요. 로컬 기능만 쓸 때는 필요 없습니다. |
 | `Claude 인증 정보를 찾을 수 없어요` | `ANTHROPIC_API_KEY`를 설정하거나 `ant auth login`으로 로그인하세요. |
 | `Claude 인증에 실패했어요` | API 키가 틀렸거나 만료됐습니다. 키를 다시 확인하세요. |
-| `환경변수 JEV_… 는 정수여야 해요` 등 | 해당 변수 값을 고치세요. `.env`의 몇 번째 줄이 문제인지도 함께 알려 줍니다. |
+| `환경변수 JEV_… 는 정수여야 해요` 등 | 해당 변수 값을 고치세요. `.env` 문법이 틀렸으면 몇 번째 줄인지도 알려 줍니다. |
 | `저장 파일(…)이 손상돼서 읽을 수 없어요` | 메모·알림 파일이 깨졌습니다. 안내된 파일을 고치거나 다른 곳으로 옮기면 새로 시작합니다. |
 | `파일(…)이 다른 Jev에서 사용 중이에요` | 다른 Jev가 같은 파일을 쓰는 중입니다. 잠시 후 다시 시도하세요. |
 | 대화가 이상하게 이어질 때 | `/reset`으로 대화 기록을 지우세요. `/status`로 현재 설정을 볼 수 있습니다. |
@@ -154,25 +160,27 @@ python -m pytest -q               # 테스트 (API 키 불필요)
 python -m pytest --cov=jev        # 커버리지 확인
 ```
 
-GitHub Actions(`.github/workflows/ci.yml`)가 Python 3.11 / 3.12 / 3.13에서 위 검사를 모두 실행합니다.
+GitHub Actions(`.github/workflows/ci.yml`)가 Linux(Python 3.11 / 3.12 / 3.13)와 Windows(Python 3.13)에서 위 검사를 모두 실행합니다.
 
 ## 파일
 | 파일 | 역할 |
 |---|---|
+| `jev/__init__.py`, `jev/__main__.py` | 패키지 공개 API(`Jev`, `route`, `__version__`)와 `python -m jev` 진입점 |
 | `jev/router.py` | 요청을 local / claude로 나누고 effort 결정 |
 | `jev/local_skills.py` | 로컬 기능 실행과 답변 문구 (한국 시간 기준) |
-| `jev/skills/memo.py` | 메모 추가·목록·검색 (`memos.json`) |
+| `jev/skills/__init__.py` | 로컬 기능 하위 패키지 |
+| `jev/skills/memo.py` | 메모 추가·목록·검색·삭제 (`memos.json`) |
 | `jev/skills/timeparse.py` | "10분 뒤", "내일 9시" 같은 한국어 시간 표현 해석 |
 | `jev/skills/reminders.py` | 알림 저장과 시간이 된 알림 꺼내기 (`reminders.json`) |
 | `jev/skills/units.py` | 길이·무게·온도·넓이·부피 단위 변환 |
 | `jev/skills/holidays.py` | 대한민국 공휴일 표(2025–2027)와 조회 |
-| `jev/storage.py` | JSON 파일 원자적 저장·읽기 (메모·알림·대화 기록 공용) |
+| `jev/storage.py` | JSON 파일 원자적 저장·읽기, 파일 잠금, 폴더 권한 (메모·알림·대화 기록 공용) |
 | `jev/korean.py` | 한국 시간대, 요일, 조사(은/는, 이에요/예요) 도우미 |
 | `jev/claude_client.py` | Claude API 호출(일반·스트리밍), 거절과 길이 초과 처리 |
 | `jev/memory.py` | 대화 기록 저장·불러오기·크기 제한 |
 | `jev/config.py` | 환경변수와 `.env` 설정 읽기, 오류 메시지 |
 | `jev/assistant.py` | `Jev.handle()`: 라우팅 실행과 대화 기록 관리 |
-| `jev/cli.py` | 터미널 REPL |
+| `jev/cli.py` | 터미널 REPL, one-shot 실행, 알림 확인 스레드 |
 | `tests/` | 테스트 (가짜 Claude 사용) |
 
 ## 공휴일 데이터 주의

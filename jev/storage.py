@@ -124,7 +124,7 @@ def file_lock(path: Path) -> Iterator[None]:
         handle.close()
 
 
-if sys.platform == "win32":  # pragma: no cover - CI는 리눅스에서만 돈다
+if sys.platform == "win32":  # pragma: no cover - 커버리지는 리눅스에서만 잰다
     import msvcrt
 
     def _lock(fd: int) -> None:
