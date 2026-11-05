@@ -271,3 +271,10 @@ def test_reminder_watcher_waits_for_lock(tmp_path):
         assert emitted == []
     t.join(2)
     assert len(emitted) == 1
+
+
+def test_version_flag(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.startswith("jev ")

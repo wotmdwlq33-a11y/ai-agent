@@ -1,6 +1,6 @@
 [project]
 name = "jev"
-version = "0.1.0"
+version = "0.2.0"
 description = "Jev: 개인 비서. 간단한 요청은 직접 처리하고, 나머지는 Claude로 라우팅"
 requires-python = ">=3.11"
 dependencies = [

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import anthropic
 
+from jev import __version__, korean
 from jev import config as config_mod
-from jev import korean
 from jev.assistant import Jev
 from jev.config import ConfigError
 from jev.memory import HistoryError
@@ -39,6 +39,7 @@ def _write(text: str) -> None:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """명령줄 옵션을 해석한다."""
     parser = argparse.ArgumentParser(prog="jev", description="Jev 개인 비서")
+    parser.add_argument("--version", action="version", version=f"jev {__version__}")
     parser.add_argument("--debug", action="store_true", help="라우팅 결과도 함께 출력")
     parser.add_argument("--no-stream", action="store_true", help="답변을 한 번에 출력")
     parser.add_argument("--no-memory", action="store_true", help="대화 기록을 파일에 저장하지 않음")
