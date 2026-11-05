@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from jev.config import default_data_dir
@@ -12,7 +12,7 @@ from jev.korean import TIMEZONE as TIMEZONE  # 하위 호환: local_skills.TIMEZ
 from jev.korean import WEEKDAYS, format_date, josa, localize
 from jev.korean import now as now
 from jev.router import route
-from jev.skills import memo, reminders, timeparse, units
+from jev.skills import holidays, memo, reminders, timeparse, units
 from jev.storage import StorageError
 
 MEMO_LIST_LIMIT = 30
@@ -75,8 +75,13 @@ def _short_date(iso: str) -> str:
     return f"{d.month}월 {d.day}일"
 
 
-def _format_memos(memos: list[memo.Memo]) -> str:
-    return "\n".join(f"#{m.id} {m.text} ({_short_date(m.created_at)})" for m in memos)
+def _format_memos(head: str, memos: list[memo.Memo], limit: int) -> str:
+    """제목 줄과 최근 limit개 메모. 더 있으면 일부만 보여 준다고 알린다."""
+    shown = memos[-limit:]
+    if len(memos) > len(shown):
+        head += f" (최근 {len(shown)}개만 보여드려요)"
+    lines = (f"#{m.id} {m.text} ({_short_date(m.created_at)})" for m in shown)
+    return f"{head}:\n" + "\n".join(lines)
 
 
 def _memo_add(args: str, current: datetime, data_dir: Path) -> str:
@@ -93,11 +98,7 @@ def _memo_list(args: str, current: datetime, data_dir: Path) -> str:
     memos = memo.list_memos(data_dir)
     if not memos:
         return "저장된 메모가 없어요. '메모: 우유 사기'처럼 남겨 보세요."
-    shown = memos[-MEMO_LIST_LIMIT:]
-    head = f"메모가 {len(memos)}개 있어요"
-    if len(memos) > len(shown):
-        head += f" (최근 {len(shown)}개만 보여드려요)"
-    return f"{head}:\n{_format_memos(shown)}"
+    return _format_memos(f"메모가 {len(memos)}개 있어요", memos, MEMO_LIST_LIMIT)
 
 
 def _memo_search(args: str, current: datetime, data_dir: Path) -> str:
@@ -105,12 +106,9 @@ def _memo_search(args: str, current: datetime, data_dir: Path) -> str:
         return "무엇을 찾을까요? '메모 검색 우유'처럼 말해 주세요."
     found = memo.search(data_dir, args)
     if not found:
-        return f"'{args}'(이)가 들어간 메모는 없어요."
-    shown = found[-SEARCH_LIMIT:]
-    head = f"'{args}' 메모를 {len(found)}개 찾았어요"
-    if len(found) > len(shown):
-        head += f" (최근 {len(shown)}개만 보여드려요)"
-    return f"{head}:\n{_format_memos(shown)}"
+        quoted = f"'{args}'"
+        return f"{josa(quoted, '이', '가')} 들어간 메모는 없어요."
+    return _format_memos(f"'{args}' 메모를 {len(found)}개 찾았어요", found, SEARCH_LIMIT)
 
 
 def _memo_delete(args: str, current: datetime, data_dir: Path) -> str:
@@ -178,8 +176,6 @@ def _convert(args: str, current: datetime, data_dir: Path) -> str:
 
 
 def _holiday_next(args: str, current: datetime, data_dir: Path) -> str:
-    from jev.skills import holidays
-
     today = current.date()
     try:
         found = holidays.next_holiday(today)
@@ -196,8 +192,6 @@ def _holiday_next(args: str, current: datetime, data_dir: Path) -> str:
 
 
 def _holiday_year(args: str, current: datetime, data_dir: Path) -> str:
-    from jev.skills import holidays
-
     this_year = current.year
     named = {"올해": this_year, "내년": this_year + 1, "작년": this_year - 1}
     m = re.search(r"\d{4}", args)
@@ -212,11 +206,9 @@ def _holiday_year(args: str, current: datetime, data_dir: Path) -> str:
 
 
 def _holiday_check(args: str, current: datetime, data_dir: Path) -> str:
-    from jev.skills import holidays
-
     word = args.strip() or "오늘"
     offset = {"오늘": 0, "내일": 1, "모레": 2}.get(word, 0)
-    day = date.fromordinal(current.date().toordinal() + offset)
+    day = current.date() + timedelta(days=offset)
     try:
         name = holidays.holiday_name(day)
     except holidays.UnsupportedYearError as e:
